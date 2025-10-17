@@ -240,10 +240,26 @@ namespace SmallDemoManager.UtilClass
             // Use the original filename (without extension) as the default suggestion
             string defaultName = Path.GetFileNameWithoutExtension(sourcePath);
 
+            // Read Data from JSon file
+            string lastComboBoxSelectionKey = "DemoNameOption";
+            int getLastComboBoxSelection = 0;
+
+            if (JsonClass.KeyExists(lastComboBoxSelectionKey))
+            {
+                string value = JsonClass.ReadJson<string>(lastComboBoxSelectionKey);
+
+                // Check whether it is really an integer?
+                if (int.TryParse(value, out int parsedValue))
+                {
+                    getLastComboBoxSelection = parsedValue;
+                }
+            }
+
+
             while (true)
             {
                 // Show custom dialog: [0] = textbox input, [1] = combobox index
-                string[] userInput = CustomInput.ShowInput(owner);
+                string[] userInput = CustomInput.ShowInput(owner, getLastComboBoxSelection);
 
                 // If user cancels or text is empty, abort
                 if (string.IsNullOrWhiteSpace(userInput[0]))
@@ -251,6 +267,10 @@ namespace SmallDemoManager.UtilClass
 
                 string inputText = userInput[0];
                 string comboIndex = userInput[1];
+
+                // Write Changes to Json
+                JsonClass.WriteJson(lastComboBoxSelectionKey, comboIndex);
+
                 string newFileNameCombo;
 
                 switch (comboIndex)
@@ -274,7 +294,7 @@ namespace SmallDemoManager.UtilClass
                         // Fallback: keep original name
                         newFileNameCombo = defaultName;
                         break;
-                }
+                }                
 
                 // Ensure the filename ends with .dem
                 string newFileName = Path.ChangeExtension(newFileNameCombo, ".dem");

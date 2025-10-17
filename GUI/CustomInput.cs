@@ -19,7 +19,7 @@ namespace SmallDemoManager.GUI
 
         public CustomInput()
         {
-            InitializeComponent();
+            InitializeComponent();            
 
             // Configure dialog behavior
             BTN_OK.DialogResult = DialogResult.OK;
@@ -42,9 +42,11 @@ namespace SmallDemoManager.GUI
         /// [0] = user input text
         /// [1] = ComboBox selected index (as string)
         /// </summary>
-        public static string[] ShowInput(IWin32Window owner)
+        public static string[] ShowInput(IWin32Window owner, int lastComboBoxSelect = 0)
         {
             using var dlg = new CustomInput();
+
+            dlg.ComboBox_DemoFileNameOption.SelectedIndex = lastComboBoxSelect;
 
             // Explicitly register with the manager if owner is also a MaterialForm
             if (owner is MaterialForm mf)
