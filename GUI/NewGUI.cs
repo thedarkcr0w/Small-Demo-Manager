@@ -416,6 +416,8 @@ namespace SmallDemoManager.GUI
             LV_TeamB.Items.Clear();
             LBL_MapName.Text = "";
             LBL_Duration.Text = "";
+            Array.Clear(_teamA_Array, 0, _teamA_Array.Length);
+            Array.Clear(_teamB_Array, 0, _teamB_Array.Length);
 
             // MatchDetails Page
             LBL_MatchDetailsPoints_TeamA.Text = "";
