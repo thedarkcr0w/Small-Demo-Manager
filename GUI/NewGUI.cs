@@ -461,8 +461,10 @@ namespace SmallDemoManager.GUI
             // Use RoundEnd but check explicitly for MatchEnded phase.
             _demo.Source1GameEvents.RoundEnd += (Source1RoundEndEvent e) =>
             {
-                if (_demo.GameRules.CSGamePhase != CSGamePhase.MatchEnded)
+                if (_demo.GameRules.CSGamePhase == CSGamePhase.MatchEnded)
+                {
                     return;
+                }                    
 
                 collected.Clear();
 
