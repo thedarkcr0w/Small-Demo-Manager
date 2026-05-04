@@ -122,10 +122,10 @@
 As always, Small-Demo-Manager is open source. The new name is easier to read and avoids potential issues with the CS2 trademark.</value>
   </data>
   <data name="LBL_AboutMe.Text" xml:space="preserve">
-    <value>Hi, I’m Pythaeus, and I love developing open-source software.
-This project, which extracts data from demos and calculates the Bitfield number, was inspired after I watched a video by KEROVSKI.
+    <value>Small Demo Manager was created by Pythaeus as an open-source tool for the CS2 community.
+Pythaeus is currently away, so darkcr0w will continue maintaining and updating the project in his absence.
 
-I’m a strong supporter of the anti-cheat community, and with this tool I want to make their work a little easier.</value>
+The goal is to carry his work forward, respect what he built, and keep his legacy alive. We wish Pythaeus all the best; he is a true legend.</value>
   </data>
   <data name="LBL_AboutB1.Text" xml:space="preserve">
     <value>Special thanks go, as always, to KEROVSKI, who inspired me to create and improve this software.

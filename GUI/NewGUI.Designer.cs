@@ -278,7 +278,7 @@
             materialLabel6.Name = "materialLabel6";
             materialLabel6.Size = new Size(455, 80);
             materialLabel6.TabIndex = 1;
-            materialLabel6.Text = "Small-Demo-Manager is the next iteration of my first project, the CS2-SourceTV-Demo-Voice-Calculator.\nIt still supports reading and analyzing CS2 demos with all the familiar features from before.";
+            materialLabel6.Text = "Small-Demo-Manager is the next step after Pythaeus' CS2-SourceTV-Demo-Voice-Calculator.\nIt still supports reading and analyzing CS2 demos with all the familiar features from before.";
             // 
             // LBL_Welcome
             // 
@@ -351,7 +351,7 @@
             tabPageBitfieldCalc.Padding = new Padding(3);
             tabPageBitfieldCalc.Size = new Size(986, 407);
             tabPageBitfieldCalc.TabIndex = 1;
-            tabPageBitfieldCalc.Text = "Bitfield-Calc.";
+            tabPageBitfieldCalc.Text = "Pick Voices";
             // 
             // LBL_Duration
             // 
@@ -489,7 +489,7 @@
             TB_ConsoleCommand.Depth = 0;
             TB_ConsoleCommand.Font = new Font("Microsoft Sans Serif", 16F, FontStyle.Regular, GraphicsUnit.Pixel);
             TB_ConsoleCommand.HideSelection = true;
-            TB_ConsoleCommand.Hint = "Select one or more players you would like to hear in the demo...";
+            TB_ConsoleCommand.Hint = "Pick the players you want to hear, then copy the command...";
             TB_ConsoleCommand.LeadingIcon = null;
             TB_ConsoleCommand.Location = new Point(23, 309);
             TB_ConsoleCommand.Margin = new Padding(3, 30, 3, 3);
@@ -1076,7 +1076,6 @@
             tabPageSettings.AllowDrop = true;
             tabPageSettings.BackColor = Color.White;
             tabPageSettings.Controls.Add(CardShell);
-            tabPageSettings.Controls.Add(CardTheme);
             tabPageSettings.Controls.Add(CardPath);
             tabPageSettings.ImageKey = "settingsNew.png";
             tabPageSettings.Location = new Point(4, 31);
@@ -1232,7 +1231,7 @@
             CardPath.Controls.Add(BTN_ChangeDemoPath);
             CardPath.Depth = 0;
             CardPath.ForeColor = Color.FromArgb(222, 0, 0, 0);
-            CardPath.Location = new Point(20, 117);
+            CardPath.Location = new Point(20, 20);
             CardPath.Margin = new Padding(20, 20, 0, 0);
             CardPath.MouseState = ReaLTaiizor.Helper.MaterialDrawHelper.MaterialMouseState.HOVER;
             CardPath.Name = "CardPath";
@@ -1583,7 +1582,7 @@
             // PBoxSettings
             // 
             PBoxSettings.Image = Properties.Resources.settingsNew;
-            PBoxSettings.Location = new Point(17, 199);
+            PBoxSettings.Location = new Point(17, 171);
             PBoxSettings.Margin = new Padding(10, 0, 0, 0);
             PBoxSettings.Name = "PBoxSettings";
             PBoxSettings.Size = new Size(24, 24);
@@ -1594,7 +1593,7 @@
             // PBoxAudio
             // 
             PBoxAudio.Image = Properties.Resources.audioNew;
-            PBoxAudio.Location = new Point(17, 108);
+            PBoxAudio.Location = new Point(17, 80);
             PBoxAudio.Margin = new Padding(10, 0, 0, 0);
             PBoxAudio.Name = "PBoxAudio";
             PBoxAudio.Size = new Size(24, 24);
@@ -1612,10 +1611,11 @@
             PBoxMatchResult.SizeMode = PictureBoxSizeMode.AutoSize;
             PBoxMatchResult.TabIndex = 10;
             PBoxMatchResult.TabStop = false;
+            PBoxMatchResult.Visible = false;
             // 
             // PBoxBitfieldCalc
             // 
-            PBoxBitfieldCalc.Image = Properties.Resources.calculatorNew;
+            PBoxBitfieldCalc.Image = Properties.Resources.matchDetailsnew;
             PBoxBitfieldCalc.Location = new Point(17, 14);
             PBoxBitfieldCalc.Margin = new Padding(10, 0, 0, 0);
             PBoxBitfieldCalc.Name = "PBoxBitfieldCalc";
@@ -1628,7 +1628,7 @@
             // 
             LBL_GuideSettings.Depth = 0;
             LBL_GuideSettings.Font = new Font("Roboto", 14F, FontStyle.Regular, GraphicsUnit.Pixel);
-            LBL_GuideSettings.Location = new Point(51, 199);
+            LBL_GuideSettings.Location = new Point(51, 171);
             LBL_GuideSettings.Margin = new Padding(0, 30, 0, 0);
             LBL_GuideSettings.MouseState = ReaLTaiizor.Helper.MaterialDrawHelper.MaterialMouseState.HOVER;
             LBL_GuideSettings.Name = "LBL_GuideSettings";
@@ -1640,7 +1640,7 @@
             // 
             LBL_GuideAudio.Depth = 0;
             LBL_GuideAudio.Font = new Font("Roboto", 14F, FontStyle.Regular, GraphicsUnit.Pixel);
-            LBL_GuideAudio.Location = new Point(51, 108);
+            LBL_GuideAudio.Location = new Point(51, 80);
             LBL_GuideAudio.Margin = new Padding(0, 28, 0, 0);
             LBL_GuideAudio.MouseState = ReaLTaiizor.Helper.MaterialDrawHelper.MaterialMouseState.HOVER;
             LBL_GuideAudio.Name = "LBL_GuideAudio";
@@ -1659,6 +1659,7 @@
             LBL_GuideMatchResult.Size = new Size(835, 19);
             LBL_GuideMatchResult.TabIndex = 1;
             LBL_GuideMatchResult.Text = "A new feature is the option to display the match result after the demo has been read in.";
+            LBL_GuideMatchResult.Visible = false;
             // 
             // LBL_GuideBitField
             // 
@@ -1668,9 +1669,9 @@
             LBL_GuideBitField.Margin = new Padding(3, 0, 0, 0);
             LBL_GuideBitField.MouseState = ReaLTaiizor.Helper.MaterialDrawHelper.MaterialMouseState.HOVER;
             LBL_GuideBitField.Name = "LBL_GuideBitField";
-            LBL_GuideBitField.Size = new Size(835, 19);
+            LBL_GuideBitField.Size = new Size(835, 46);
             LBL_GuideBitField.TabIndex = 0;
-            LBL_GuideBitField.Text = "As in the old version, you again have the bitfield calculator plus the option to view the profiles on well-known sites.";
+            LBL_GuideBitField.Text = "After loading a demo, use the Match Room to view the result, pick the players you want to hear, copy the command, and paste it into CS2. You can still open player profiles from the lists.";
             // 
             // menuIconList
             // 
@@ -1692,18 +1693,17 @@
             AutoScaleDimensions = new SizeF(6F, 13F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.White;
-            ClientSize = new Size(1000, 500);
+            ClientSize = new Size(1280, 720);
             Controls.Add(materialTabControlMain);
             DrawerShowIconsWhenHidden = true;
             DrawerTabControl = materialTabControlMain;
             Font = new Font("Microsoft Sans Serif", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
             Icon = (Icon)resources.GetObject("$this.Icon");
-            MaximizeBox = false;
-            MaximumSize = new Size(1000, 500);
-            MinimumSize = new Size(1000, 500);
+            MaximizeBox = true;
+            MinimumSize = new Size(1000, 600);
             Name = "NewGUI";
             Padding = new Padding(3, 55, 3, 3);
-            Sizable = false;
+            Sizable = true;
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Small Demo Manager";
             Shown += NewGUI_Shown;

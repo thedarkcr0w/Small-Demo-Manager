@@ -17,6 +17,9 @@ namespace SmallDemoManager.HelperClass
         public double HeadShotPerecent { get; set; }    // Get HS kills %
         public double Kd { get; set; }                  // K/D
         public int Damage { get; set; }                 // Get Total Damage
+        public int Score { get; set; }                  // Get scoreboard score
+        public int UtilityDamage { get; set; }          // Get grenade / utility damage
+        public int EnemiesFlashed { get; set; }         // Get enemies flashed
         public int MVP { get; set; }                    // Get MVPs
         public int ThreeK { get; set; }                 // Get 3k
         public int FourK { get; set; }                  // Get 4k
