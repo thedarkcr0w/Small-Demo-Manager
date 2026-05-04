@@ -111,6 +111,8 @@ namespace SmallDemoManager.GUI
         private int _matchRoomProgress = 50;
         private readonly HashSet<int> _selectedVoiceUserIds = new();
         private readonly Dictionary<int, System.Windows.Forms.Panel> _matchRoomPlayerCards = new();
+        private readonly HashSet<int> _matchRoomTeamAUserIds = new();
+        private readonly HashSet<int> _matchRoomTeamBUserIds = new();
 
         private static readonly Color KarasuBg = Color.FromArgb(12, 11, 9);
         private static readonly Color KarasuBgAlt = Color.FromArgb(17, 16, 9);
@@ -282,8 +284,11 @@ namespace SmallDemoManager.GUI
             var teamAHeader = CreateHeaderTeamPanel(false);
             _matchRoomTeamAName = CreateMatchRoomLabel("Team A", 16, FontStyle.Bold, KarasuForeground, ContentAlignment.BottomLeft);
             _matchRoomTeamAMeta = CreateMatchRoomLabel("CT side", 9, FontStyle.Bold, KarasuMuted, ContentAlignment.TopLeft, true);
+            ConfigureTeamNameSelector(_matchRoomTeamAName, true);
             teamAHeader.Controls.Add(_matchRoomTeamAName);
             teamAHeader.Controls.Add(_matchRoomTeamAMeta);
+            teamAHeader.Resize += (s, e) => LayoutTeamHeader(teamAHeader, _matchRoomTeamAName, _matchRoomTeamAMeta, false);
+            LayoutTeamHeader(teamAHeader, _matchRoomTeamAName, _matchRoomTeamAMeta, false);
 
             var scorePanel = new System.Windows.Forms.Panel
             {
@@ -307,12 +312,17 @@ namespace SmallDemoManager.GUI
             scorePanel.Controls.Add(_matchRoomScoreB);
             scorePanel.Controls.Add(_matchRoomStateBadge);
             scorePanel.Controls.Add(_matchRoomMapMeta);
+            scorePanel.Resize += (s, e) => LayoutScorePanel(scorePanel);
+            LayoutScorePanel(scorePanel);
 
             var teamBHeader = CreateHeaderTeamPanel(true);
             _matchRoomTeamBName = CreateMatchRoomLabel("Team B", 16, FontStyle.Bold, KarasuForeground, ContentAlignment.BottomRight);
             _matchRoomTeamBMeta = CreateMatchRoomLabel("T side", 9, FontStyle.Bold, KarasuMuted, ContentAlignment.TopRight, true);
+            ConfigureTeamNameSelector(_matchRoomTeamBName, false);
             teamBHeader.Controls.Add(_matchRoomTeamBName);
             teamBHeader.Controls.Add(_matchRoomTeamBMeta);
+            teamBHeader.Resize += (s, e) => LayoutTeamHeader(teamBHeader, _matchRoomTeamBName, _matchRoomTeamBMeta, true);
+            LayoutTeamHeader(teamBHeader, _matchRoomTeamBName, _matchRoomTeamBMeta, true);
 
             scoreboardGrid.Controls.Add(teamAHeader, 0, 0);
             scoreboardGrid.Controls.Add(scorePanel, 1, 0);
@@ -490,18 +500,51 @@ namespace SmallDemoManager.GUI
                 materialTabControlMain.TabPages.Remove(tabPageBitfieldCalc);
         }
 
-        private static FlowLayoutPanel CreateHeaderTeamPanel(bool alignRight)
+        private static System.Windows.Forms.Panel CreateHeaderTeamPanel(bool alignRight)
         {
-            return new FlowLayoutPanel
+            return new System.Windows.Forms.Panel
             {
                 Dock = DockStyle.Fill,
                 BackColor = KarasuBg,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
                 Padding = new Padding(0, 6, 0, 0),
-                Margin = new Padding(0),
-                RightToLeft = alignRight ? RightToLeft.Yes : RightToLeft.No
+                Margin = new Padding(0)
             };
+        }
+
+        private static void LayoutTeamHeader(Control header, System.Windows.Forms.Label nameLabel, System.Windows.Forms.Label metaLabel, bool alignRight)
+        {
+            FitTeamNameLabel(nameLabel);
+            FitTeamMetaLabel(metaLabel);
+
+            int nameX = alignRight ? Math.Max(0, header.ClientSize.Width - nameLabel.Width) : 0;
+            int metaX = nameX + (nameLabel.Width - metaLabel.Width) / 2;
+            metaX = Math.Clamp(metaX, 0, Math.Max(0, header.ClientSize.Width - metaLabel.Width));
+
+            nameLabel.Location = new Point(nameX, 4);
+            metaLabel.Location = new Point(metaX, 36);
+        }
+
+        private void LayoutScorePanel(Control scorePanel)
+        {
+            if (_matchRoomScoreA == null || _matchRoomScoreB == null || _matchRoomStateBadge == null || _matchRoomMapMeta == null)
+                return;
+
+            int gap = 22;
+            int scoreWidth = Math.Max(44, Math.Max(
+                TextRenderer.MeasureText(_matchRoomScoreA.Text, _matchRoomScoreA.Font).Width,
+                TextRenderer.MeasureText(_matchRoomScoreB.Text, _matchRoomScoreB.Font).Width) + 14);
+            int badgeWidth = Math.Max(86, TextRenderer.MeasureText(_matchRoomStateBadge.Text, _matchRoomStateBadge.Font).Width + 22);
+            int groupWidth = scoreWidth + gap + badgeWidth + gap + scoreWidth;
+            int left = Math.Max(0, (scorePanel.ClientSize.Width - groupWidth) / 2);
+
+            _matchRoomScoreA.Location = new Point(left, 0);
+            _matchRoomScoreA.Size = new Size(scoreWidth, 38);
+            _matchRoomStateBadge.Location = new Point(left + scoreWidth + gap, 6);
+            _matchRoomStateBadge.Size = new Size(badgeWidth, 20);
+            _matchRoomScoreB.Location = new Point(left + scoreWidth + gap + badgeWidth + gap, 0);
+            _matchRoomScoreB.Size = new Size(scoreWidth, 38);
+            _matchRoomMapMeta.Location = new Point(left, 31);
+            _matchRoomMapMeta.Size = new Size(groupWidth, 18);
         }
 
         private static FlowLayoutPanel CreateMatchRoomColumn(bool alignRight)
@@ -535,6 +578,94 @@ namespace SmallDemoManager.GUI
             };
         }
 
+        private void ConfigureTeamNameSelector(System.Windows.Forms.Label label, bool teamA)
+        {
+            label.Cursor = Cursors.Hand;
+            label.Padding = new Padding(4, 0, 4, 0);
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            FitTeamNameLabel(label);
+            label.Click += (s, e) => SelectTeamVoicePlayers(teamA);
+            label.Paint += (s, e) =>
+            {
+                if (!IsTeamFullySelected(teamA))
+                    return;
+
+                using var pen = new Pen(KarasuAccent, 2F);
+                e.Graphics.DrawRectangle(pen, 1, 1, label.Width - 3, label.Height - 3);
+            };
+        }
+
+        private static void FitTeamNameLabel(System.Windows.Forms.Label label)
+        {
+            int width = TextRenderer.MeasureText(label.Text, label.Font).Width + 18;
+            label.Size = new Size(Math.Clamp(width, 78, 280), 30);
+        }
+
+        private static void FitTeamMetaLabel(System.Windows.Forms.Label label)
+        {
+            int width = TextRenderer.MeasureText(label.Text, label.Font).Width + 10;
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            label.Size = new Size(Math.Clamp(width, 78, 280), 18);
+        }
+
+        private void SelectTeamVoicePlayers(bool teamA)
+        {
+            if (!DemoHasTeamVoice())
+                return;
+
+            var userIds = teamA ? _matchRoomTeamAUserIds : _matchRoomTeamBUserIds;
+            if (userIds.Count == 0)
+                return;
+
+            bool selectTeam = !IsTeamFullySelected(teamA);
+            foreach (int userId in userIds)
+            {
+                if (selectTeam)
+                    _selectedVoiceUserIds.Add(userId);
+                else
+                    _selectedVoiceUserIds.Remove(userId);
+            }
+
+            UpdateAllPlayerCardSelectionStates();
+            ChangeConsoleCommand();
+        }
+
+        private bool IsTeamFullySelected(bool teamA)
+        {
+            var userIds = teamA ? _matchRoomTeamAUserIds : _matchRoomTeamBUserIds;
+            return DemoHasTeamVoice()
+                && userIds.Count > 0
+                && userIds.All(userId => _selectedVoiceUserIds.Contains(userId));
+        }
+
+        private void UpdateTeamNameSelectionStates()
+        {
+            if (_matchRoomTeamAName != null)
+            {
+                bool canSelectTeamA = DemoHasTeamVoice() && _matchRoomTeamAUserIds.Count > 0;
+                _matchRoomTeamAName.Cursor = canSelectTeamA ? Cursors.Hand : Cursors.Default;
+                _matchRoomTeamAName.ForeColor = IsTeamFullySelected(true) ? KarasuAccent : KarasuForeground;
+                _matchRoomTeamAName.Invalidate();
+            }
+
+            if (_matchRoomTeamBName != null)
+            {
+                bool canSelectTeamB = DemoHasTeamVoice() && _matchRoomTeamBUserIds.Count > 0;
+                _matchRoomTeamBName.Cursor = canSelectTeamB ? Cursors.Hand : Cursors.Default;
+                _matchRoomTeamBName.ForeColor = IsTeamFullySelected(false) ? KarasuAccent : KarasuForeground;
+                _matchRoomTeamBName.Invalidate();
+            }
+        }
+
+        private void UpdateTeamHeaderLayout()
+        {
+            if (_matchRoomTeamAName?.Parent != null && _matchRoomTeamAMeta != null)
+                LayoutTeamHeader(_matchRoomTeamAName.Parent, _matchRoomTeamAName, _matchRoomTeamAMeta, false);
+
+            if (_matchRoomTeamBName?.Parent != null && _matchRoomTeamBMeta != null)
+                LayoutTeamHeader(_matchRoomTeamBName.Parent, _matchRoomTeamBName, _matchRoomTeamBMeta, true);
+        }
+
         private static System.Windows.Forms.Label CreateBadgeLabel(string text, Color color)
         {
             return new System.Windows.Forms.Label
@@ -556,24 +687,37 @@ namespace SmallDemoManager.GUI
             _matchRoomTeamBFlow?.Controls.Clear();
             _matchRoomCenterFlow?.Controls.Clear();
             _matchRoomPlayerCards.Clear();
+            _matchRoomTeamAUserIds.Clear();
+            _matchRoomTeamBUserIds.Clear();
 
-            if (_matchRoomTeamAName != null) _matchRoomTeamAName.Text = "Team A";
-            if (_matchRoomTeamBName != null) _matchRoomTeamBName.Text = "Team B";
+            if (_matchRoomTeamAName != null)
+            {
+                _matchRoomTeamAName.Text = "Team A";
+                FitTeamNameLabel(_matchRoomTeamAName);
+            }
+            if (_matchRoomTeamBName != null)
+            {
+                _matchRoomTeamBName.Text = "Team B";
+                FitTeamNameLabel(_matchRoomTeamBName);
+            }
             if (_matchRoomTeamAMeta != null) _matchRoomTeamAMeta.Text = "CT SIDE";
             if (_matchRoomTeamBMeta != null) _matchRoomTeamBMeta.Text = "T SIDE";
+            UpdateTeamHeaderLayout();
             if (_matchRoomScoreA != null) _matchRoomScoreA.Text = "0";
             if (_matchRoomScoreB != null) _matchRoomScoreB.Text = "0";
             if (_matchRoomStateBadge != null) _matchRoomStateBadge.Text = "DEMO";
             if (_matchRoomMapMeta != null) _matchRoomMapMeta.Text = "EU | 5v5 | Map TBD";
+            if (_matchRoomScoreA?.Parent != null) LayoutScorePanel(_matchRoomScoreA.Parent);
 
             SetMatchRoomProgress(50);
 
             if (_matchRoomCenterFlow != null)
             {
-                AddMatchRoomSectionLabel(_matchRoomCenterFlow, "Match room", false);
+                AddMatchRoomSectionLabel(_matchRoomCenterFlow, "Match room", false, true);
                 AddCenterCard("Status", new[] { message }, KarasuOrange);
             }
             UpdateVoiceCommandHelp();
+            UpdateTeamNameSelectionStates();
         }
 
         private void RenderMatchRoom(List<PlayerSnapshot> ctPlayers, List<PlayerSnapshot> tPlayers, int ctScore, int tScore)
@@ -585,14 +729,24 @@ namespace SmallDemoManager.GUI
             string teamBName = tPlayers.FirstOrDefault()?.TeamName ?? "Terrorists";
             string mapName = FormatMatchRoomMapName(_mapName);
 
-            if (_matchRoomTeamAName != null) _matchRoomTeamAName.Text = TrimForUi(teamAName, 28);
-            if (_matchRoomTeamBName != null) _matchRoomTeamBName.Text = TrimForUi(teamBName, 28);
+            if (_matchRoomTeamAName != null)
+            {
+                _matchRoomTeamAName.Text = TrimForUi(teamAName, 28);
+                FitTeamNameLabel(_matchRoomTeamAName);
+            }
+            if (_matchRoomTeamBName != null)
+            {
+                _matchRoomTeamBName.Text = TrimForUi(teamBName, 28);
+                FitTeamNameLabel(_matchRoomTeamBName);
+            }
             if (_matchRoomTeamAMeta != null) _matchRoomTeamAMeta.Text = $"CT SIDE | {ctPlayers.Count} PLAYERS";
             if (_matchRoomTeamBMeta != null) _matchRoomTeamBMeta.Text = $"T SIDE | {tPlayers.Count} PLAYERS";
+            UpdateTeamHeaderLayout();
             if (_matchRoomScoreA != null) _matchRoomScoreA.Text = ctScore.ToString();
             if (_matchRoomScoreB != null) _matchRoomScoreB.Text = tScore.ToString();
             if (_matchRoomStateBadge != null) _matchRoomStateBadge.Text = DemoHasTeamVoice() ? "VOICE" : "DEMO";
             if (_matchRoomMapMeta != null) _matchRoomMapMeta.Text = $"EU | 5v5 | {mapName}";
+            if (_matchRoomScoreA?.Parent != null) LayoutScorePanel(_matchRoomScoreA.Parent);
 
             SetMatchRoomProgress(ctScore + tScore > 0 ? (int)Math.Round((double)ctScore * 100 / (ctScore + tScore)) : 50);
 
@@ -600,6 +754,12 @@ namespace SmallDemoManager.GUI
             _matchRoomTeamBFlow.Controls.Clear();
             _matchRoomCenterFlow.Controls.Clear();
             _matchRoomPlayerCards.Clear();
+            _matchRoomTeamAUserIds.Clear();
+            _matchRoomTeamBUserIds.Clear();
+            foreach (int userId in ctPlayers.Select(player => player.UserId).Where(IsValidVoiceUserId))
+                _matchRoomTeamAUserIds.Add(userId);
+            foreach (int userId in tPlayers.Select(player => player.UserId).Where(IsValidVoiceUserId))
+                _matchRoomTeamBUserIds.Add(userId);
 
             AddMatchRoomSectionLabel(_matchRoomTeamAFlow, teamAName, false);
             foreach (var player in ctPlayers.OrderByDescending(p => p.Score).ThenByDescending(p => p.Kills))
@@ -607,7 +767,7 @@ namespace SmallDemoManager.GUI
                 _matchRoomTeamAFlow.Controls.Add(CreatePlayerCard(player, false, _matchRoomTeamAFlow));
             }
 
-            AddMatchRoomSectionLabel(_matchRoomCenterFlow, "What to do next", false);
+            AddMatchRoomSectionLabel(_matchRoomCenterFlow, "What to do next", false, true);
             AddCenterCard("Demo loaded", new[]
             {
                 $"Map: {mapName}",
@@ -640,14 +800,15 @@ namespace SmallDemoManager.GUI
             }
 
             UpdateVoiceCommandHelp();
+            UpdateTeamNameSelectionStates();
         }
 
-        private void AddMatchRoomSectionLabel(FlowLayoutPanel flow, string text, bool alignRight)
+        private void AddMatchRoomSectionLabel(FlowLayoutPanel flow, string text, bool alignRight, bool center = false)
         {
-            var label = CreateMatchRoomLabel(TrimForUi(text, 34), 8F, FontStyle.Bold, KarasuMuted, alignRight ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft, true);
-            label.Width = GetFlowContentWidth(flow, 210);
+            var label = CreateMatchRoomLabel(TrimForUi(text, 34), 8F, FontStyle.Bold, KarasuMuted, center ? ContentAlignment.MiddleCenter : alignRight ? ContentAlignment.MiddleRight : ContentAlignment.MiddleLeft, true);
+            label.Width = center ? GetCenteredCenterColumnWidth(flow) : GetFlowContentWidth(flow, 210);
             label.Height = 18;
-            label.Margin = new Padding(0, 0, 0, 8);
+            SetFlowItemMargin(label, flow, center, 8);
             flow.Controls.Add(label);
         }
 
@@ -656,7 +817,7 @@ namespace SmallDemoManager.GUI
             if (_matchRoomCenterFlow == null)
                 return;
 
-            int width = GetFlowContentWidth(_matchRoomCenterFlow, 210);
+            int width = GetCenteredCenterColumnWidth(_matchRoomCenterFlow);
             var card = CreateMatchRoomCard(width, 0);
             card.Padding = new Padding(10, 8, 10, 8);
 
@@ -683,7 +844,19 @@ namespace SmallDemoManager.GUI
             }
 
             card.Height = top + 6;
+            SetFlowItemMargin(card, _matchRoomCenterFlow, true, 8);
             _matchRoomCenterFlow.Controls.Add(card);
+        }
+
+        private static int GetCenteredCenterColumnWidth(FlowLayoutPanel flow)
+        {
+            return Math.Min(320, GetFlowContentWidth(flow, 210));
+        }
+
+        private static void SetFlowItemMargin(Control control, FlowLayoutPanel flow, bool center, int bottomMargin)
+        {
+            int left = center ? Math.Max(0, (GetFlowContentWidth(flow, control.Width) - control.Width) / 2) : 0;
+            control.Margin = new Padding(left, 0, 0, bottomMargin);
         }
 
         private System.Windows.Forms.Panel CreatePlayerCard(PlayerSnapshot player, bool flip, FlowLayoutPanel owner)
@@ -1695,6 +1868,7 @@ namespace SmallDemoManager.GUI
             }
 
             UpdateVoiceCommandHelp();
+            UpdateTeamNameSelectionStates();
         }
 
         /// <summary>
