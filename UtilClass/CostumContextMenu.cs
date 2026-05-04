@@ -179,6 +179,88 @@ namespace SmallDemoManager.UtilClass
             };
         }
 
+        public static MaterialContextMenuStrip CreatePlayerProfileContextMenu(
+            Form owner,
+            PlayerSnapshot player,
+            string steamProfileLink,
+            string cswatchProfileLink,
+            string leetifyProfileLink,
+            string csStatsProfileLink)
+        {
+            var cms = new MaterialContextMenuStrip
+            {
+                ImageScalingSize = new Size(24, 24),
+                MouseState = ReaLTaiizor.Helper.MaterialDrawHelper.MaterialMouseState.HOVER,
+                AutoSize = true
+            };
+
+            var playerHeader = new MaterialToolStripMenuItem
+            {
+                Text = _spaceIcon + (player.PlayerName ?? "Unknown Player"),
+                Enabled = false,
+                Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold),
+                Image = Properties.Resources.iconPlayer,
+                AutoSize = true
+            };
+
+            var copySteamId = new MaterialToolStripMenuItem
+            {
+                Text = _spaceIcon + "Copy SteamID64",
+                Image = Properties.Resources.iconSteam,
+                AutoSize = true,
+                Enabled = player.PlayerSteamID.HasValue
+            };
+
+            var profileDefinitions = new (string Label, string UrlPrefix, Image Icon)[]
+            {
+                ("Open Steam Profile", steamProfileLink, Properties.Resources.iconSteam),
+                ("Open cswatch.in Profile", cswatchProfileLink, Properties.Resources.iconCsWatch),
+                ("Open leetify.com Profile", leetifyProfileLink, Properties.Resources.iconLeetify),
+                ("Open csstats.gg Profile", csStatsProfileLink, Properties.Resources.iconCsStats)
+            };
+
+            cms.Items.Add(playerHeader);
+            cms.Items.Add(new ToolStripSeparator());
+            cms.Items.Add(copySteamId);
+            cms.Items.Add(new ToolStripSeparator());
+
+            copySteamId.Click += (s, e) =>
+            {
+                if (!player.PlayerSteamID.HasValue)
+                    return;
+
+                Clipboard.SetText(player.PlayerSteamID.ToString() ?? "Error reading SteamID");
+                MaterialUiHelper.ShowSnack(owner, $"SteamID64 for {player.PlayerName} copied to clipboard.", false);
+            };
+
+            foreach (var def in profileDefinitions)
+            {
+                var item = new MaterialToolStripMenuItem
+                {
+                    Text = _spaceIcon + def.Label,
+                    Image = def.Icon,
+                    AutoSize = true,
+                    Enabled = player.PlayerSteamID.HasValue
+                };
+
+                item.Click += (s, e) =>
+                {
+                    if (!player.PlayerSteamID.HasValue)
+                        return;
+
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = def.UrlPrefix + player.PlayerSteamID,
+                        UseShellExecute = true
+                    });
+                };
+
+                cms.Items.Add(item);
+            }
+
+            return cms;
+        }
+
         /// <summary>
         /// Configures a context menu for the provided <see cref="MaterialListBox"/> 
         /// to allow copying audio/voice files into a designated folder.  

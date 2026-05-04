@@ -778,7 +778,7 @@ namespace SmallDemoManager.GUI
             {
                 $"CT side: {ctPlayers.Count} players",
                 $"T side: {tPlayers.Count} players",
-                DemoHasTeamVoice() ? "Click cards to choose who you hear" : "Stats are available on the cards"
+                DemoHasTeamVoice() ? "Left-click voice, right-click profiles" : "Right-click cards to open profiles"
             }, _matchId.HasValue ? KarasuAccent : KarasuOrange);
             AddCenterCard("Round stats", new[]
             {
@@ -917,6 +917,7 @@ namespace SmallDemoManager.GUI
             card.Controls.Add(sideBadge);
             card.Controls.Add(metrics);
 
+            ApplyPlayerProfileContextMenu(card, player);
             _matchRoomPlayerCards[player.UserId] = card;
             ApplyPlayerCardSelectionState(card, player.UserId);
             if (canSelectVoice)
@@ -928,11 +929,37 @@ namespace SmallDemoManager.GUI
         private void WirePlayerCardClick(Control control, Action clickAction)
         {
             control.Cursor = Cursors.Hand;
-            control.Click += (s, e) => clickAction();
+            control.MouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                    clickAction();
+            };
 
             foreach (Control child in control.Controls)
             {
                 WirePlayerCardClick(child, clickAction);
+            }
+        }
+
+        private void ApplyPlayerProfileContextMenu(Control control, PlayerSnapshot player)
+        {
+            var contextMenu = CostumContextMenu.CreatePlayerProfileContextMenu(
+                this,
+                player,
+                _steamProfileLink,
+                _cswatchProfileLink,
+                _leetifyProfileLink,
+                _csStatsProfileLink);
+
+            ApplyContextMenuRecursive(control, contextMenu);
+        }
+
+        private static void ApplyContextMenuRecursive(Control control, ContextMenuStrip contextMenu)
+        {
+            control.ContextMenuStrip = contextMenu;
+            foreach (Control child in control.Controls)
+            {
+                ApplyContextMenuRecursive(child, contextMenu);
             }
         }
 
