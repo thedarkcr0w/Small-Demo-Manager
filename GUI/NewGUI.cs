@@ -1534,14 +1534,9 @@ namespace SmallDemoManager.GUI
                     _matchId = reservation.MatchId;
             };
 
-            // Use RoundEnd but check explicitly for MatchEnded phase.
+            // Keep the final RoundEnd too; in MR12 matches the winning round is often round 13.
             _demo.Source1GameEvents.RoundEnd += (Source1RoundEndEvent e) =>
             {
-                if (_demo.GameRules.CSGamePhase == CSGamePhase.MatchEnded)
-                {
-                    return;
-                }                    
-
                 collected.Clear();
 
                 foreach (var team in new[] { _demo.TeamCounterTerrorist, _demo.TeamTerrorist })
