@@ -395,7 +395,7 @@ function SettingsModal({ onClose, initial, onSave }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sidebar — folder browser
 // ─────────────────────────────────────────────────────────────────────────────
-function Sidebar({ style, activeFolder, onFolder, counts, scan, activeTags, onTagFilter, onScan, onAddFolder, favCount, onOpenAbout, onOpenSettings, cs2Path, availableTags }) {
+function Sidebar({ style, activeFolder, onFolder, counts, scan, activeTags, onTagFilter, onScan, onAddFolder, onRemoveFolder, favCount, onOpenAbout, onOpenSettings, cs2Path, availableTags }) {
   const collapsed = style === 'rail';
   return (
     <aside className={'sb ' + (collapsed ? 'sb-rail' : '')}>
@@ -426,15 +426,23 @@ function Sidebar({ style, activeFolder, onFolder, counts, scan, activeTags, onTa
           </div>
           <nav className="sb-nav">
             {window.FOLDERS.map(f => (
-              <button key={f.id} className={'sb-item sb-folder ' + (activeFolder === f.id ? 'sb-item-active' : '')}
-                      onClick={() => onFolder(f.id)}>
-                <IconFolder size={15}/>
-                <span className="sb-folder-text">
-                  <span className="sb-folder-label">{f.label}</span>
-                  <span className="sb-folder-path">{f.path}</span>
-                </span>
-                <span className="sb-count">{f.count}</span>
-              </button>
+              <div key={f.id} className="sb-folder-row">
+                <button className={'sb-item sb-folder ' + (activeFolder === f.id ? 'sb-item-active' : '')}
+                        onClick={() => onFolder(f.id)}>
+                  <IconFolder size={15}/>
+                  <span className="sb-folder-text">
+                    <span className="sb-folder-label">{f.label}</span>
+                    <span className="sb-folder-path">{f.path}</span>
+                  </span>
+                  <span className="sb-count">{f.count}</span>
+                </button>
+                <button className="sb-folder-remove"
+                        title={`Remove ${f.label}`}
+                        aria-label={`Remove ${f.label}`}
+                        onClick={() => onRemoveFolder(f)}>
+                  <IconMinus size={12}/>
+                </button>
+              </div>
             ))}
           </nav>
 
@@ -988,6 +996,25 @@ function App() {
       window.__toast?.('Add folder failed: ' + e.message);
     }
   };
+  const onRemoveFolder = async (folder) => {
+    if (!folder) return;
+    if (!window.SDM?.hasHost) { window.__toast?.('Bridge unavailable'); return; }
+    if (!window.confirm(`Remove "${folder.label}" from the program? Demo files stay on disk.`)) return;
+
+    try {
+      const ok = await window.SDM.call('removeFolder', { folderId: folder.id });
+      if (!ok) { window.__toast?.('Remove folder failed'); return; }
+
+      const removedIds = new Set(demos.filter(d => d.folderId === folder.id).map(d => d.id));
+      setFolders(fs => fs.filter(f => f.id !== folder.id));
+      setDemos(ds => ds.filter(d => d.folderId !== folder.id));
+      if (activeFolder === folder.id) setActiveFolder('*');
+      if (removedIds.has(selectedId)) setSelectedId(null);
+      window.__toast?.(`Removed "${folder.label}"`);
+    } catch (e) {
+      window.__toast?.('Remove folder failed: ' + e.message);
+    }
+  };
 
   // Listen for scan-progress events from the host while a scan runs.
   React.useEffect(() => {
@@ -1051,6 +1078,7 @@ function App() {
           onTagFilter={onTagFilter}
           onScan={onScan}
           onAddFolder={onAddFolder}
+          onRemoveFolder={onRemoveFolder}
           onOpenAbout={() => setAboutOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           cs2Path={settings.cs2Path}

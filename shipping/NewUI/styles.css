@@ -649,6 +649,8 @@ body { min-height: 100vh; display: flex; align-items: stretch; justify-content: 
   font-weight: 700;
 }
 .sb-sect-row .ic-btn { color: var(--mut); }
+.sb-folder-row { display: flex; align-items: stretch; gap: 4px; }
+.sb-folder-row .sb-folder { flex: 1; min-width: 0; }
 .sb-folder { align-items: flex-start; padding: 8px 10px; }
 .sb-folder > svg { margin-top: 2px; flex-shrink: 0; color: var(--mut); }
 .sb-item-active.sb-folder > svg { color: var(--acc); }
@@ -663,6 +665,22 @@ body { min-height: 100vh; display: flex; align-items: stretch; justify-content: 
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sb-item-active .sb-folder-label { color: var(--acc); }
+.sb-folder-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  margin: 4px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--mut-2);
+  cursor: default;
+  opacity: .45;
+  flex-shrink: 0;
+}
+.sb-folder-row:hover .sb-folder-remove { opacity: 1; }
+.sb-folder-remove:hover { background: rgba(239,68,68,.12); color: #ff8a8a; }
 
 /* ─────────────── Folder header (above list) ─────────────── */
 .folder-header {

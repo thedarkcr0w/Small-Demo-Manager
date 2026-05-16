@@ -125,6 +125,14 @@ function fmtClock(sec) {
   return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
 }
 
+function ratingColor(rating) {
+  const value = parseFloat(rating);
+  if (!Number.isFinite(value)) return 'var(--mut)';
+  if (value < 1) return '#ef4444';
+  if (value < 1.25) return '#f59e0b';
+  return '#22c55e';
+}
+
 function playerSelectionKey(player) {
   if (!player) return '';
   if (Number.isInteger(player.userId) && player.userId > 0) return `uid:${player.userId}`;
@@ -541,7 +549,7 @@ function TeamPanel({ team, label, score, players, mirror, selected, onToggle, on
                 <div className="pname-stats" style={{ flexDirection: mirror ? 'row-reverse' : 'row' }}>
                   <span><span style={{ color: 'var(--sec)' }}>{p.k}</span><span style={{ color: 'var(--mut-2)' }}>/{p.d}</span></span>
                   <span style={{ color: 'var(--mut-2)' }}>·</span>
-                  <span style={{ color: parseFloat(p.rating) >= 1.1 ? 'var(--acc)' : 'var(--mut)', fontWeight: 600 }}>{p.rating}</span>
+                  <span style={{ color: ratingColor(p.rating), fontWeight: 600 }}>{p.rating} rating</span>
                 </div>
               </div>
               <button className="more-btn" onClick={(e) => { e.stopPropagation(); onPlayerClick(p, e.clientX, e.clientY); }}>
