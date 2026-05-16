@@ -13,15 +13,15 @@ This is a new version of the "[CS2-SourceTV-Demo-Voice-Calculator](https://githu
 
 ---
 
-<img width="998" height="496" alt="grafik" src="https://github.com/user-attachments/assets/e898f93c-6650-4311-87ac-8d761ce20ff3" />
+<img width="1280" height="800" alt="SmallDemoManager match overview" src="showcase.png" />
 
 
 
 
 ## ⚙️ Runtime Requirements
 
-This application requires the **.NET 8.0 Runtime** to be installed on your system.  
-➡️ [Download .NET 8.0 Runtime (Microsoft)](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.15-windows-x64-installer?cid=getdotnetcore)
+This application requires the **.NET 9.0 Runtime** to be installed on your system.  
+➡️ [Download .NET 9.0 Runtime (Microsoft)](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 
 If the application does not start, make sure this runtime is installed.
 
