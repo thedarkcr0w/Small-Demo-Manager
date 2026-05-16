@@ -882,6 +882,31 @@ function App() {
     setDemos(ds => ds.map(d => d.id === id ? { ...d, note } : d));
     window.SDM?.call('setNote', { demoId: id, note }).catch(() => {});
   };
+  const onPlayerAction = async (action, player, demo) => {
+    if (!player || !demo) return;
+    const steamId = player.steamId || '';
+    const links = window.PLAYER_PROFILE_LINKS || {};
+    const openProfile = async (prefix) => {
+      if (!steamId) { window.__toast?.('SteamID64 unavailable'); return; }
+      const ok = await window.SDM?.call('openExternal', { url: prefix + steamId }).catch(() => false);
+      if (!ok) window.__toast?.('Could not open profile');
+    };
+
+    switch (action) {
+      case 'copySteamId': {
+        if (!steamId) { window.__toast?.('SteamID64 unavailable'); return; }
+        const ok = await window.SDM?.call('copyToClipboard', { text: steamId }).catch(() => false);
+        window.__toast?.(ok ? `Copied SteamID64 for ${player.name}` : 'Copy failed');
+        return;
+      }
+      case 'openSteam':   return openProfile(links.steam || 'http://steamcommunity.com/profiles/');
+      case 'openCswatch': return openProfile(links.cswatch || 'https://cswatch.in/player/');
+      case 'openLeetify': return openProfile(links.leetify || 'https://leetify.com/app/profile/');
+      case 'openCsstats': return openProfile(links.csstats || 'https://csstats.gg/player/');
+      default:
+        window.__toast?.('Unknown player action');
+    }
+  };
   const onTagFilter = (tag) => {
     setActiveTags(ts => ts.includes(tag) ? ts.filter(x => x !== tag) : [...ts, tag]);
   };
@@ -1085,6 +1110,7 @@ function App() {
                   onTagToggle={onTagToggle}
                   onNoteChange={onNoteChange}
                   onFavorite={onFavorite}
+                  onPlayerAction={onPlayerAction}
                   voiceOpen={voiceOpen}
                   onVoiceOpen={onVoiceOpen}
                 />

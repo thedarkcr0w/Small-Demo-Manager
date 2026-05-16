@@ -256,8 +256,8 @@ namespace SmallDemoManager.Bridge
             mapName ??= demo.ServerInfo?.MapName;
             hostName ??= demo.ServerInfo?.HostName;
 
-            var ctPlayers = snapshots.Where(p => p.TeamNumber == 3).ToList();
-            var tPlayers = snapshots.Where(p => p.TeamNumber == 2).ToList();
+            var ctPlayers = SortPlayersForScoreboard(snapshots.Where(p => p.TeamNumber == 3));
+            var tPlayers = SortPlayersForScoreboard(snapshots.Where(p => p.TeamNumber == 2));
 
             dto.Map = NormalizeMap(mapName);
             dto.Server = hostName ?? "";
@@ -322,6 +322,7 @@ namespace SmallDemoManager.Bridge
                 K = p.Kills,
                 D = p.Death,
                 A = p.Assists,
+                Score = p.Score,
                 Hs = (int)Math.Round(p.HeadShotPerecent),
                 Adr = adr,
                 Rating = rating.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
@@ -329,6 +330,16 @@ namespace SmallDemoManager.Bridge
                 Favorite = false,
                 UserId = p.UserId,
             };
+        }
+
+        private static List<PlayerSnapshot> SortPlayersForScoreboard(IEnumerable<PlayerSnapshot> players)
+        {
+            return players
+                .OrderByDescending(p => p.Score)
+                .ThenByDescending(p => p.Kills)
+                .ThenBy(p => p.Death)
+                .ThenBy(p => p.PlayerName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private static readonly HashSet<string> KnownMaps = new(StringComparer.OrdinalIgnoreCase)

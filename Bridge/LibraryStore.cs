@@ -28,7 +28,7 @@ namespace SmallDemoManager.Bridge
         }
 
         // Bump when the demo parser's output shape changes — older caches get re-parsed.
-        public const int CurrentParseVersion = 3;
+        public const int CurrentParseVersion = 4;
 
         public sealed class DemoMeta
         {

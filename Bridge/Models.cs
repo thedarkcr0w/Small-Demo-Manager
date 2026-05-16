@@ -19,6 +19,7 @@ namespace SmallDemoManager.Bridge
         public int K { get; set; }
         public int A { get; set; }
         public int D { get; set; }
+        public int Score { get; set; }
         public int Hs { get; set; }
         public int Adr { get; set; }
         public string Rating { get; set; } = "0.00";

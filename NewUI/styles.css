@@ -299,6 +299,10 @@ body { min-height: 100vh; display: flex; align-items: stretch; justify-content: 
   white-space: nowrap;
 }
 .menu-item:hover { background: var(--surf-4); color: var(--fg); }
+.menu-item:disabled {
+  opacity: .45;
+  pointer-events: none;
+}
 
 /* Active filter chips bar */
 .active-filters {

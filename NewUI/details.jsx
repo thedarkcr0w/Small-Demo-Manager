@@ -125,6 +125,36 @@ function fmtClock(sec) {
   return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
 }
 
+function playerSelectionKey(player) {
+  if (!player) return '';
+  if (Number.isInteger(player.userId) && player.userId > 0) return `uid:${player.userId}`;
+  if (player.steamId) return `steam:${player.steamId}`;
+  return player.name ? `name:${player.name}` : '';
+}
+
+function buildVoiceCommand(players) {
+  let mask = 0;
+  let validPlayers = 0;
+
+  for (const player of players) {
+    const userId = Number(player?.userId);
+    if (!Number.isInteger(userId) || userId < 1 || userId > 20) continue;
+
+    mask |= 1 << (userId - 1);
+    validPlayers++;
+  }
+
+  if (!validPlayers) return null;
+  return `tv_listen_voice_indices ${mask}; tv_listen_voice_indices_h ${mask}`;
+}
+
+window.PLAYER_PROFILE_LINKS = {
+  steam: 'http://steamcommunity.com/profiles/',
+  cswatch: 'https://cswatch.in/player/',
+  leetify: 'https://leetify.com/app/profile/',
+  csstats: 'https://csstats.gg/player/',
+};
+
 function VoiceExtractorPanel({ demo, onBack }) {
   const players = React.useMemo(
     () => [...demo.players1, ...demo.players2].map(p => ({
@@ -428,7 +458,7 @@ function VoiceExtractorPanel({ demo, onBack }) {
   );
 }
 
-function PlayerMenu({ name, onClose, anchor }) {
+function PlayerMenu({ player, onClose, anchor, onAction }) {
   // anchor: { x, y } relative to viewport
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -438,15 +468,14 @@ function PlayerMenu({ name, onClose, anchor }) {
     document.addEventListener('keydown', onEsc);
     return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onEsc); };
   }, [onClose]);
+  const name = player?.name || 'Unknown player';
+  const hasSteamId = !!player?.steamId;
   const items = [
-    ['Copy SteamID64',          <IconCopy size={13}/>],
-    ['Open Steam profile',      <IconExternal size={13}/>],
-    ['Open cswatch.in profile', <IconExternal size={13}/>],
-    ['Open leetify.com profile',<IconExternal size={13}/>],
-    ['Open csstats.gg profile', <IconExternal size={13}/>],
-    null,
-    ['Add to favorites',        <IconFavorite size={13}/>],
-    ['Flag for review',         <IconFlag size={13}/>],
+    { key: 'copySteamId', label: 'Copy SteamID64',          icon: <IconCopy size={13}/>, disabled: !hasSteamId },
+    { key: 'openSteam',   label: 'Open Steam profile',      icon: <IconCS size={13}/>, disabled: !hasSteamId },
+    { key: 'openCswatch', label: 'Open cswatch.in profile', icon: <IconExternal size={13}/>, disabled: !hasSteamId },
+    { key: 'openLeetify', label: 'Open leetify.com profile',icon: <IconExternal size={13}/>, disabled: !hasSteamId },
+    { key: 'openCsstats', label: 'Open csstats.gg profile', icon: <IconExternal size={13}/>, disabled: !hasSteamId },
   ];
   return (
     <div ref={ref} className="player-menu" style={{
@@ -457,23 +486,25 @@ function PlayerMenu({ name, onClose, anchor }) {
         {name}
       </div>
       <div style={{ padding: 4 }}>
-        {items.map((it, i) => it === null
-          ? <div key={i} style={{ height: 1, background: 'var(--border)', margin: '4px 4px' }}/>
-          : (
-            <button key={i} className="menu-item" onClick={() => { onClose(); window.__toast?.(it[0]); }}>
-              <span style={{ color: 'var(--mut)' }}>{it[0].startsWith('Open Steam') ? <IconCS size={13}/> : it[1]}</span>
-              <span>{it[0]}</span>
-            </button>
-          )
-        )}
+        {items.map((it, i) => (
+          <button key={i} className="menu-item" disabled={it.disabled} onClick={() => { onClose(); onAction?.(it.key, player); }}>
+            <span style={{ color: 'var(--mut)' }}>{it.icon}</span>
+            <span>{it.label}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
 function TeamPanel({ team, label, score, players, mirror, selected, onToggle, onPlayerClick, accentTeam }) {
-  const allSel = players.every(p => selected.has(p.name));
-  const someSel = !allSel && players.some(p => selected.has(p.name));
+  const isSelected = (player) => selected.has(playerSelectionKey(player));
+  const allSel = players.length > 0 && players.every(isSelected);
+  const someSel = !allSel && players.some(isSelected);
+  const toggleAll = () => {
+    const targets = allSel ? players.filter(isSelected) : players.filter(p => !isSelected(p));
+    targets.forEach(onToggle);
+  };
   return (
     <div className="team-panel">
       <div className="team-head" style={{ flexDirection: mirror ? 'row-reverse' : 'row' }}>
@@ -490,14 +521,15 @@ function TeamPanel({ team, label, score, players, mirror, selected, onToggle, on
 
       <div className="team-rows">
         {players.map((p, i) => {
-          const isSel = selected.has(p.name);
+          const isSel = isSelected(p);
+          const rowKey = playerSelectionKey(p) || p.steamId || p.name || i;
           return (
-            <div key={i} className={'team-row ' + (isSel ? 'team-row-sel' : '')}
+            <div key={rowKey} className={'team-row ' + (isSel ? 'team-row-sel' : '')}
                  style={{ flexDirection: mirror ? 'row-reverse' : 'row' }}
                  onContextMenu={(e) => { e.preventDefault(); onPlayerClick(p, e.clientX, e.clientY); }}
-                 onClick={(e) => { if (e.target.tagName !== 'INPUT') onToggle(p.name); }}>
+                 onClick={(e) => { if (e.target.tagName !== 'INPUT') onToggle(p); }}>
               <label className="cb-wrap" onClick={(e) => e.stopPropagation()}>
-                <input type="checkbox" checked={isSel} onChange={() => onToggle(p.name)}/>
+                <input type="checkbox" checked={isSel} onChange={() => onToggle(p)}/>
                 <span className="cb-box">{isSel && <IconCheck size={10}/>}</span>
               </label>
               <div className="pname" style={{ textAlign: mirror ? 'right' : 'left' }}>
@@ -520,17 +552,11 @@ function TeamPanel({ team, label, score, players, mirror, selected, onToggle, on
         })}
       </div>
 
-      <div className="team-foot" onClick={() => {
-        if (allSel) players.forEach(p => onToggle(p.name));
-        else players.filter(p => !selected.has(p.name)).forEach(p => onToggle(p.name));
-      }} style={{ flexDirection: mirror ? 'row-reverse' : 'row' }}>
+      <div className="team-foot" onClick={toggleAll} style={{ flexDirection: mirror ? 'row-reverse' : 'row' }}>
         <label className="cb-wrap" onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={allSel}
                  ref={el => el && (el.indeterminate = someSel)}
-                 onChange={() => {
-                   if (allSel) players.forEach(p => onToggle(p.name));
-                   else players.filter(p => !selected.has(p.name)).forEach(p => onToggle(p.name));
-                 }}/>
+                 onChange={toggleAll}/>
           <span className={'cb-box ' + (someSel ? 'cb-box-some' : '')}>
             {allSel && <IconCheck size={10}/>}
             {someSel && <IconMinus size={10}/>}
@@ -539,7 +565,7 @@ function TeamPanel({ team, label, score, players, mirror, selected, onToggle, on
         <span style={{ fontSize: 11, color: 'var(--sec)', fontWeight: 500 }}>Select all</span>
         <span style={{ flex: 1 }}/>
         <span style={{ fontSize: 10, color: 'var(--mut)', fontFamily: 'JetBrains Mono, monospace' }}>
-          {players.filter(p => selected.has(p.name)).length}/{players.length}
+          {players.filter(isSelected).length}/{players.length}
         </span>
       </div>
     </div>
@@ -568,8 +594,8 @@ function MatchView({ demo, selected, onToggle, onPlayerClick, onOpenVoice }) {
   );
 }
 
-function CopyCmdBar({ selected, onCopy, onClear }) {
-  const count = selected.size;
+function CopyCmdBar({ selectedPlayers, onCopy, onClear, onToggle }) {
+  const count = selectedPlayers.length;
   return (
     <div className="copycmd">
       <div className="copycmd-input">
@@ -579,10 +605,10 @@ function CopyCmdBar({ selected, onCopy, onClear }) {
         ) : (
           <>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-              {Array.from(selected).slice(0, 6).map(n => (
-                <span key={n} className="player-pill">
-                  {n}
-                  <button onClick={() => onToggleByName(n)} className="chip-x"><IconClose size={9}/></button>
+              {selectedPlayers.slice(0, 6).map(player => (
+                <span key={playerSelectionKey(player)} className="player-pill">
+                  {player.name}
+                  <button onClick={() => onToggle(player)} className="chip-x"><IconClose size={9}/></button>
                 </span>
               ))}
               {count > 6 && <span className="player-pill player-pill-more">+{count - 6}</span>}
@@ -685,9 +711,9 @@ function ActionBar({ demo, onAction, onFavorite }) {
   );
 }
 
-function DetailsPanel({ demo, onAction, onTagToggle, onNoteChange, onFavorite, voiceOpen, onVoiceOpen }) {
+function DetailsPanel({ demo, onAction, onTagToggle, onNoteChange, onFavorite, onPlayerAction, voiceOpen, onVoiceOpen }) {
   const [selectedPlayers, setSelectedPlayers] = React.useState(new Set());
-  const [menu, setMenu] = React.useState(null); // { name, x, y }
+  const [menu, setMenu] = React.useState(null); // { player, x, y }
 
   // Reset selection when demo changes
   React.useEffect(() => { setSelectedPlayers(new Set()); onVoiceOpen?.(false); }, [demo?.id]);
@@ -708,35 +734,29 @@ function DetailsPanel({ demo, onAction, onTagToggle, onNoteChange, onFavorite, v
     );
   }
 
-  const onToggle = (name) => {
+  const allPlayers = [...demo.players1, ...demo.players2];
+  const selectedPlayerRows = allPlayers.filter(p => selectedPlayers.has(playerSelectionKey(p)));
+
+  const onToggle = (player) => {
+    const key = playerSelectionKey(player);
+    if (!key) return;
     setSelectedPlayers(s => {
       const n = new Set(s);
-      if (n.has(name)) n.delete(name); else n.add(name);
+      if (n.has(key)) n.delete(key); else n.add(key);
       return n;
     });
   };
-  const onPlayerClick = (p, x, y) => setMenu({ name: p.name, x, y });
+  const onPlayerClick = (p, x, y) => setMenu({ player: p, x, y });
   const onCopy = async () => {
-    // Build a CS2 `tv_listen_voice_indices` bitfield matching the legacy WinForms behavior:
-    // bit (userId-1) per selected player. UserId comes from the demo's player entity index.
-    const all = [...demo.players1, ...demo.players2];
-    let bitfield = 0;
-    for (const name of selectedPlayers) {
-      const p = all.find(x => x.name === name);
-      if (p && typeof p.userId === 'number' && p.userId >= 1 && p.userId <= 32) {
-        bitfield |= 1 << (p.userId - 1);
-      }
-    }
-    if (!bitfield) {
+    const cmd = buildVoiceCommand(selectedPlayerRows);
+    if (!cmd) {
       window.__toast?.('No valid players selected');
       return;
     }
-    const cmd = `tv_listen_voice_indices ${bitfield}; tv_listen_voice_indices_h ${bitfield}`;
     const ok = await window.SDM?.call('copyToClipboard', { text: cmd }).catch(() => false);
     window.__toast?.(ok ? `Copied: ${cmd}` : 'Copy failed');
   };
   const onClear = () => setSelectedPlayers(new Set());
-  window.__detailsOnToggleByName = onToggle;
 
   return (
     <div className="details-scroll">
@@ -748,17 +768,21 @@ function DetailsPanel({ demo, onAction, onTagToggle, onNoteChange, onFavorite, v
         onPlayerClick={onPlayerClick}
         onOpenVoice={() => onVoiceOpen?.(true)}
       />
-      <CopyCmdBar selected={selectedPlayers} onCopy={onCopy} onClear={onClear}/>
+      <CopyCmdBar selectedPlayers={selectedPlayerRows} onCopy={onCopy} onClear={onClear} onToggle={onToggle}/>
       <RoundTimeline demo={demo}/>
       <NotesTags demo={demo} onTagToggle={onTagToggle} onNoteChange={onNoteChange}/>
       <ActionBar demo={demo} onAction={onAction} onFavorite={onFavorite}/>
 
-      {menu && <PlayerMenu name={menu.name} anchor={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)}/>}
+      {menu && (
+        <PlayerMenu
+          player={menu.player}
+          anchor={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+          onAction={(action, player) => onPlayerAction?.(action, player, demo)}
+        />
+      )}
     </div>
   );
 }
-
-// shim: CopyCmdBar uses onToggleByName via global ref since it's a sibling
-function onToggleByName(name) { window.__detailsOnToggleByName?.(name); }
 
 window.DetailsPanel = DetailsPanel;
