@@ -152,9 +152,8 @@ namespace SmallDemoManager.AudioExtract
                 progress?.Report(1.0f);
                 return true;
             }
-            catch (Exception ex)
+            catch
             {
-                MaterialUiHelper.ShowLongMessageBox("Error during extraction", $"{ex.Message}", MessageBoxButtons.OK);
                 return false;
             }
         }

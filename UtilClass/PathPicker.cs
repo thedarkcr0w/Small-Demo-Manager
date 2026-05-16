@@ -1,88 +1,49 @@
-﻿using Microsoft.WindowsAPICodePack.Dialogs;
-using SmallDemoManager.HelperClass;
+using Microsoft.WindowsAPICodePack.Dialogs;
 
 namespace SmallDemoManager.UtilClass
 {
-    /// <summary>
-    /// Handles selection and storage of the CS2 demo folder path using the JsonClass utility.
-    /// </summary>
     internal static class PathPicker
     {
-        /// <summary>
-        /// Checks whether a non-empty path is already stored in the JSON config.
-        /// </summary>
-        public static bool HasPath(Form owner, string pathKey)
+        public static bool HasPath(string pathKey)
         {
-            if (!JsonClass.KeyExists(pathKey))
-                return false;
-
-            var storedPath = JsonClass.ReadJson<string>(pathKey);
-            return !string.IsNullOrWhiteSpace(storedPath);
+            if (!JsonClass.KeyExists(pathKey)) return false;
+            var stored = JsonClass.ReadJson<string>(pathKey);
+            return !string.IsNullOrWhiteSpace(stored);
         }
 
-        /// <summary>
-        /// Prompts the user with a folder-picker dialog to select the folder.
-        /// Saves the chosen path to config.
-        /// </summary>
-        public static string EnsurePathConfigured(Form owner, string title, string pathKey)
+        public static string? PickFolder(string title, string? initialDirectory = null)
         {
-            while (true)
+            using var dialog = new CommonOpenFileDialog
             {
-                var dialog = new CommonOpenFileDialog
-                {
-                    IsFolderPicker = true,
-                    Title = title,
-                    InitialDirectory = AppDomain.CurrentDomain.BaseDirectory,
-                    EnsurePathExists = true,
-                    Multiselect = false
-                };
-
-                if (dialog.ShowDialog() == CommonFileDialogResult.Ok)
-                {
-                    string selectedPath = dialog.FileName;
-
-                    if (!Directory.Exists(selectedPath))
-                    {
-                        MaterialUiHelper.ShowMaterialMsgBox(owner, "Invalid Path", "The selected path is not a valid directory.", "OK", false, "Cancel");
-                        continue;
-                    }
-
-                    JsonClass.WriteJson(pathKey, selectedPath);
-                    return selectedPath;
-                }
-
-                return null; // User cancelled
-            }
+                IsFolderPicker = true,
+                Title = title,
+                InitialDirectory = initialDirectory ?? AppDomain.CurrentDomain.BaseDirectory,
+                EnsurePathExists = true,
+                Multiselect = false
+            };
+            return dialog.ShowDialog() == CommonFileDialogResult.Ok ? dialog.FileName : null;
         }
 
-        /// <summary>
-        /// Retrieves the stored folder path. If no path is stored,
-        /// prompts the user to select one.
-        /// </summary>
-        public static string GetPath(Form owner, string title, string pathKey)
+        public static string? EnsurePathConfigured(string title, string pathKey)
         {
-            if (HasPath(owner, pathKey))
+            var picked = PickFolder(title);
+            if (picked != null && Directory.Exists(picked))
             {
-                return JsonClass.ReadJson<string>(pathKey);
+                JsonClass.WriteJson(pathKey, picked);
+                return picked;
             }
-
-            return EnsurePathConfigured(owner, title, pathKey);
+            return null;
         }
 
-        /// <summary>
-        /// Retrieves the stored folder path. If no path is stored,
-        /// prompts the user to select one.
-        /// </summary>
-        public static string ReadPath(Form owner, string pathKey)
+        public static string? GetPath(string title, string pathKey)
         {
-            if (HasPath(owner, pathKey))
-            {
-                return JsonClass.ReadJson<string>(pathKey);
-            }
-            else
-            {
-                return null;
-            }
+            if (HasPath(pathKey)) return JsonClass.ReadJson<string>(pathKey);
+            return EnsurePathConfigured(title, pathKey);
+        }
+
+        public static string? ReadPath(string pathKey)
+        {
+            return HasPath(pathKey) ? JsonClass.ReadJson<string>(pathKey) : null;
         }
     }
 }
