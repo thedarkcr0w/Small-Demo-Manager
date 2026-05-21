@@ -9,4 +9,4 @@ using static GlobalVersionInfo;
 [assembly: AssemblyCopyright("Copyright © 2025")]
 [assembly: AssemblyVersion(ASSEMBLY_VERSION)]
 [assembly: AssemblyFileVersion(GUI_VERSION)]
-[assembly: TargetFramework(".NETCoreApp,Version=v8.0", FrameworkDisplayName = ".NET 8.0")]
+[assembly: TargetFramework(".NETCoreApp,Version=v9.0", FrameworkDisplayName = ".NET 9.0")]
