@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>SmallDemoManager — CS2 demo manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div id="root">
+    <div id="__boot" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#7a7874;font:13px/1.4 system-ui,Manrope,sans-serif;background:#0c0b09">
+      <div style="text-align:center">
+        <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#3e3b34;margin-bottom:6px">SmallDemoManager</div>
+        <div id="__boot_status">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <div id="__fatal" style="display:none;position:fixed;inset:0;padding:24px;color:#ffb4b4;background:#1a0a0a;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;overflow:auto;white-space:pre-wrap;z-index:99999"></div>
+
+  <script>
+    window.__bootStatus = (msg) => {
+      const el = document.getElementById('__boot_status'); if (el) el.textContent = msg;
+    };
+    window.__fatal = (msg) => {
+      const el = document.getElementById('__fatal');
+      if (!el) { document.body.textContent = String(msg); return; }
+      el.style.display = 'block';
+      el.textContent = String(msg);
+    };
+    window.addEventListener('error', (e) => window.__fatal('[error] ' + (e.error?.stack || e.message || e)));
+    window.addEventListener('unhandledrejection', (e) => window.__fatal('[unhandledrejection] ' + (e.reason?.stack || e.reason || e)));
+  </script>
+
+  <!-- Production React (vendored locally, ~140 KB total minified). -->
+  <script src="vendor/react.min.js"></script>
+  <script src="vendor/react-dom.min.js"></script>
+
+  <!-- App scripts. .js files are pre-compiled from .jsx via esbuild so no
+       in-browser Babel transform happens on startup. See NewUI/build.sh -->
+  <script src="sdm-bridge.js"></script>
+  <script src="data.js"></script>
+  <script src="icons.js"></script>
+  <script src="tweaks-panel.js"></script>
+  <script src="details.js"></script>
+  <script src="app.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

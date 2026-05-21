@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(gh release *)",
+      "Bash(unzip -l SmallDemoManager-shipping.zip)",
+      "Bash(gh api *)",
+      "Bash(gh repo *)",
+      "Bash(dotnet publish *)",
+      "Bash(git tag *)",
+      "Bash(git push *)",
+      "Bash(dotnet build *)",
+      "Bash(git checkout *)",
+      "Bash(git clean *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(Get-Process -Name SmallDemoManager -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "PowerShell(\"killed\")",
+      "Bash(python3 -c ' *)",
+      "PowerShell(Get-Process -Name SmallDemoManager -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 500; Remove-Item -Force \"$env:LOCALAPPDATA\\\\Small-Demo-Manager\\\\bridge.log\" -ErrorAction SilentlyContinue; Start-Process -FilePath \"bin\\\\Debug\\\\net9.0-windows\\\\SmallDemoManager.exe\"; \"launched\")",
+      "Bash(git commit *)"
+    ]
+  }
+}
