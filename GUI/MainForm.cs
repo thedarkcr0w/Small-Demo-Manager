@@ -47,7 +47,11 @@ namespace SmallDemoManager.GUI
             FormBorderStyle = FormBorderStyle.None;
             DoubleBuffered = true;
 
-            _web = new WebView2 { Dock = DockStyle.Fill, AllowExternalDrop = false };
+            // AllowExternalDrop=true lets the WebView accept file drops and surface them
+            // as standard HTML5 drag events; the JS handler in NewUI/drop.js streams the
+            // file bytes back to the bridge. (We can't read the OS path from a dropped
+            // File — Chromium hides it for security.)
+            _web = new WebView2 { Dock = DockStyle.Fill, AllowExternalDrop = true };
             Controls.Add(_web);
 
             _bridge = new BridgeService(this);
@@ -181,6 +185,7 @@ namespace SmallDemoManager.GUI
         private void OnDragEnter(object? sender, DragEventArgs e)
         {
             bool has = HasAnyDemoSource(e.Data);
+            BridgeService.DebugLog($"OnDragEnter has={has} formats={string.Join(",", e.Data?.GetFormats() ?? Array.Empty<string>())}");
             e.Effect = has ? DragDropEffects.Copy : DragDropEffects.None;
             if (has)
             {
@@ -191,14 +196,17 @@ namespace SmallDemoManager.GUI
 
         private void OnDragLeave(object? sender, EventArgs e)
         {
+            BridgeService.DebugLog("OnDragLeave");
             _bridge.Emit("drag-active", new { active = false });
         }
 
         private void OnDragDrop(object? sender, DragEventArgs e)
         {
+            BridgeService.DebugLog($"OnDragDrop formats={string.Join(",", e.Data?.GetFormats() ?? Array.Empty<string>())}");
             _bridge.Emit("drag-active", new { active = false });
 
             var real = ExtractRealDemoPaths(e.Data);
+            BridgeService.DebugLog($"OnDragDrop realPaths={real.Length}");
             if (real.Length > 0)
             {
                 _bridge.Emit("files-dropped", new { paths = real, staged = false });

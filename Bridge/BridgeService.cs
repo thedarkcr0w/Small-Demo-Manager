@@ -41,6 +41,22 @@ namespace SmallDemoManager.Bridge
 
         private static readonly string LogPath = Path.Combine(
             LocalAppDataFolder.RootFolderPath, "bridge.log");
+        public static void DebugLog(string msg) => Log(msg);
+
+        private static string MakeUniqueStagingPath(string dir, string fileName)
+        {
+            var dest = Path.Combine(dir, fileName);
+            if (!File.Exists(dest)) return dest;
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            for (int i = 1; i < 1000; i++)
+            {
+                dest = Path.Combine(dir, $"{stem} ({i}){ext}");
+                if (!File.Exists(dest)) return dest;
+            }
+            return Path.Combine(dir, $"{stem}-{Guid.NewGuid():N}{ext}");
+        }
+
         private static void Log(string msg)
         {
             try
@@ -190,6 +206,46 @@ namespace SmallDemoManager.Bridge
                     if (req.Payload.TryGetProperty("newName", out var nn) && nn.ValueKind == JsonValueKind.String)
                         newName = nn.GetString();
                     return await MoveToCs2Async(demoId, newName);
+                }
+
+                case "importDroppedBytes":
+                {
+                    // Files dropped onto the WebView: write the base64 payloads to a
+                    // staging dir and replay through the same files-dropped path the
+                    // Form-level handler uses so React's importDemoFiles flow picks up.
+                    var itemsEl = req.Payload.GetProperty("items");
+                    var staging = LocalAppDataFolder.EnsureSubDirectoryExists("DropStaging");
+                    var paths = new List<string>();
+                    int skipped = 0;
+                    foreach (var item in itemsEl.EnumerateArray())
+                    {
+                        var name = item.TryGetProperty("name", out var n) ? n.GetString() : null;
+                        var b64 = item.TryGetProperty("dataBase64", out var d) ? d.GetString() : null;
+                        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(b64)) { skipped++; continue; }
+                        try
+                        {
+                            var safeName = string.Concat(name!.Where(c => !Path.GetInvalidFileNameChars().Contains(c)));
+                            if (!safeName.EndsWith(".dem", StringComparison.OrdinalIgnoreCase)) safeName += ".dem";
+                            var dest = MakeUniqueStagingPath(staging, safeName);
+                            File.WriteAllBytes(dest, Convert.FromBase64String(b64!));
+                            paths.Add(dest);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log("importDroppedBytes write failed: " + ex.Message);
+                            skipped++;
+                        }
+                    }
+                    if (paths.Count > 0)
+                        Emit("files-dropped", new { paths = paths.ToArray(), staged = true });
+                    return new { ok = true, count = paths.Count, skipped };
+                }
+
+                case "dragActive":
+                {
+                    var active = req.Payload.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True;
+                    Emit("drag-active", new { active });
+                    return true;
                 }
 
                 case "importDemoFiles":
