@@ -27,6 +27,15 @@ namespace SmallDemoManager.Bridge
         private CancellationTokenSource? _voiceCts;
         private CancellationTokenSource? _scanCts;
 
+        // Active streaming-import sessions: sessionId → (open file stream, dest path).
+        private sealed class ImportSession
+        {
+            public FileStream Stream { get; init; } = null!;
+            public string Path { get; init; } = "";
+        }
+        private readonly Dictionary<string, ImportSession> _importSessions = new();
+        private readonly object _importLock = new();
+
         public string? StartupDemo { get; set; }
         public Action? WindowDragRequested { get; set; }
 
@@ -42,6 +51,18 @@ namespace SmallDemoManager.Bridge
         private static readonly string LogPath = Path.Combine(
             LocalAppDataFolder.RootFolderPath, "bridge.log");
         public static void DebugLog(string msg) => Log(msg);
+
+        private void AbortImportSession(string sessionId)
+        {
+            ImportSession? sess;
+            lock (_importLock)
+            {
+                if (!_importSessions.TryGetValue(sessionId, out sess)) return;
+                _importSessions.Remove(sessionId);
+            }
+            try { sess.Stream.Dispose(); } catch { }
+            try { File.Delete(sess.Path); } catch { }
+        }
 
         private static string MakeUniqueStagingPath(string dir, string fileName)
         {
@@ -208,37 +229,99 @@ namespace SmallDemoManager.Bridge
                     return await MoveToCs2Async(demoId, newName);
                 }
 
-                case "importDroppedBytes":
+                case "dropDebug":
                 {
-                    // Files dropped onto the WebView: write the base64 payloads to a
-                    // staging dir and replay through the same files-dropped path the
-                    // Form-level handler uses so React's importDemoFiles flow picks up.
-                    var itemsEl = req.Payload.GetProperty("items");
+                    // Surfaces what was in dataTransfer for drops we couldn't parse —
+                    // helps diagnose archive viewers / non-standard drag sources.
+                    Log("dropDebug: " + req.Payload.GetRawText());
+                    return true;
+                }
+
+                case "importChunkBegin":
+                {
+                    var sessionId = req.Payload.GetProperty("sessionId").GetString() ?? "";
+                    var rawName = req.Payload.GetProperty("name").GetString() ?? "";
+                    if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(rawName))
+                        return new { ok = false, error = "missing session/name" };
+
                     var staging = LocalAppDataFolder.EnsureSubDirectoryExists("DropStaging");
-                    var paths = new List<string>();
-                    int skipped = 0;
-                    foreach (var item in itemsEl.EnumerateArray())
+                    var safe = string.Concat(rawName.Where(c => !Path.GetInvalidFileNameChars().Contains(c)));
+                    if (!safe.EndsWith(".dem", StringComparison.OrdinalIgnoreCase)) safe += ".dem";
+                    var dest = MakeUniqueStagingPath(staging, safe);
+                    try
                     {
-                        var name = item.TryGetProperty("name", out var n) ? n.GetString() : null;
-                        var b64 = item.TryGetProperty("dataBase64", out var d) ? d.GetString() : null;
-                        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(b64)) { skipped++; continue; }
-                        try
+                        var fs = new FileStream(dest, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16);
+                        lock (_importLock) _importSessions[sessionId] = new ImportSession { Stream = fs, Path = dest };
+                        Log($"importChunkBegin {sessionId} -> {dest}");
+                        return new { ok = true };
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("importChunkBegin failed: " + ex.Message);
+                        return new { ok = false, error = ex.Message };
+                    }
+                }
+
+                case "importChunkData":
+                {
+                    var sessionId = req.Payload.GetProperty("sessionId").GetString() ?? "";
+                    var b64 = req.Payload.GetProperty("dataBase64").GetString() ?? "";
+                    ImportSession? sess;
+                    lock (_importLock) _importSessions.TryGetValue(sessionId, out sess);
+                    if (sess == null) return new { ok = false, error = "unknown session" };
+                    try
+                    {
+                        var bytes = Convert.FromBase64String(b64);
+                        await sess.Stream.WriteAsync(bytes);
+                        return new { ok = true };
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("importChunkData failed: " + ex.Message);
+                        AbortImportSession(sessionId);
+                        return new { ok = false, error = ex.Message };
+                    }
+                }
+
+                case "importChunkEnd":
+                {
+                    var sessionId = req.Payload.GetProperty("sessionId").GetString() ?? "";
+                    ImportSession? sess;
+                    lock (_importLock) {
+                        _importSessions.TryGetValue(sessionId, out sess);
+                        if (sess != null) _importSessions.Remove(sessionId);
+                    }
+                    if (sess == null) return new { ok = false, error = "unknown session" };
+                    try { await sess.Stream.FlushAsync(); sess.Stream.Dispose(); }
+                    catch (Exception ex) { Log("importChunkEnd flush failed: " + ex.Message); }
+                    Log($"importChunkEnd {sessionId} -> {sess.Path}");
+                    return new { ok = true, path = sess.Path };
+                }
+
+                case "importChunkAbort":
+                {
+                    // Find the in-flight session for this file name (best-effort) and clean up.
+                    var name = req.Payload.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    string? toAbort = null;
+                    lock (_importLock)
+                    {
+                        foreach (var kv in _importSessions)
                         {
-                            var safeName = string.Concat(name!.Where(c => !Path.GetInvalidFileNameChars().Contains(c)));
-                            if (!safeName.EndsWith(".dem", StringComparison.OrdinalIgnoreCase)) safeName += ".dem";
-                            var dest = MakeUniqueStagingPath(staging, safeName);
-                            File.WriteAllBytes(dest, Convert.FromBase64String(b64!));
-                            paths.Add(dest);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log("importDroppedBytes write failed: " + ex.Message);
-                            skipped++;
+                            if (kv.Value.Path.EndsWith(name, StringComparison.OrdinalIgnoreCase))
+                            { toAbort = kv.Key; break; }
                         }
                     }
-                    if (paths.Count > 0)
-                        Emit("files-dropped", new { paths = paths.ToArray(), staged = true });
-                    return new { ok = true, count = paths.Count, skipped };
+                    if (toAbort != null) AbortImportSession(toAbort);
+                    return new { ok = true };
+                }
+
+                case "importChunkFinalize":
+                {
+                    // JS finished all chunks; emit files-dropped so React picks them up.
+                    var pathsEl = req.Payload.GetProperty("paths");
+                    var paths = pathsEl.EnumerateArray().Select(e => e.GetString() ?? "").Where(p => !string.IsNullOrWhiteSpace(p)).ToArray();
+                    if (paths.Length > 0) Emit("files-dropped", new { paths, staged = true });
+                    return new { ok = true };
                 }
 
                 case "dragActive":

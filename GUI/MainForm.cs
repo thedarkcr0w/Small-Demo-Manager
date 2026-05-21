@@ -27,6 +27,22 @@ namespace SmallDemoManager.GUI
         private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         private const int DWMWCP_ROUND = 2;
 
+        [DllImport("ole32.dll", PreserveSig = true)]
+        private static extern int RegisterDragDrop(IntPtr hwnd, IDropTargetCom pDropTarget);
+        [DllImport("ole32.dll", PreserveSig = true)]
+        private static extern int RevokeDragDrop(IntPtr hwnd);
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+        private const uint GW_CHILD = 5;
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumChildWindows(IntPtr hWndParent,
+            EnumChildProc lpEnumFunc, IntPtr lParam);
+        private delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
+
+        private WebViewDropForwarder? _dropForwarder;
+        private readonly List<IntPtr> _registeredDropHwnds = new();
+
         private readonly WebView2 _web;
         private readonly BridgeService _bridge;
         private readonly string? _startupDemo;
@@ -47,18 +63,16 @@ namespace SmallDemoManager.GUI
             FormBorderStyle = FormBorderStyle.None;
             DoubleBuffered = true;
 
-            // AllowExternalDrop=true lets the WebView accept file drops and surface them
-            // as standard HTML5 drag events; the JS handler in NewUI/drop.js streams the
-            // file bytes back to the bridge. (We can't read the OS path from a dropped
-            // File — Chromium hides it for security.)
-            _web = new WebView2 { Dock = DockStyle.Fill, AllowExternalDrop = true };
+            // AllowExternalDrop=false stops WebView2 from registering its own drop
+            // target (which only delivers HTML5 File objects — no archive-virtual
+            // file support). After init we replace it with WebViewDropForwarder so
+            // we can read CFSTR_FILEDESCRIPTORW/CFSTR_FILECONTENTS for 7-Zip/WinRAR.
+            _web = new WebView2 { Dock = DockStyle.Fill, AllowExternalDrop = false };
             Controls.Add(_web);
 
             _bridge = new BridgeService(this);
             _bridge.WindowDragRequested = BeginWindowDrag;
 
-            // AllowExternalDrop=false makes WebView2 decline OLE drops, so dragging
-            // a .dem file from Explorer onto the window falls through to the Form.
             AllowDrop = true;
             DragEnter += OnDragEnter;
             DragLeave += OnDragLeave;
@@ -175,51 +189,97 @@ namespace SmallDemoManager.GUI
             finally { Marshal.ReleaseComObject(stream); }
         }
 
-        private static bool HasAnyDemoSource(WinIDataObject? data)
+        internal static bool HasAnyDemoSource(WinIDataObject? data)
         {
+            if (data == null) return false;
             if (ExtractRealDemoPaths(data).Length > 0) return true;
             var names = ReadVirtualDemoNames(data);
-            return names.Any(n => !string.IsNullOrEmpty(n));
+            if (names.Any(n => !string.IsNullOrEmpty(n))) return true;
+            // 7-Zip / shell namespace extensions: items come as Shell IDLists, not
+            // CFSTR_FILEDESCRIPTORW. Resolve via the shell to detect .dem entries.
+            if (data is ComIDataObject com && ShellDropResolver.CountDemoItems(com) > 0) return true;
+            return false;
         }
 
         private void OnDragEnter(object? sender, DragEventArgs e)
         {
-            bool has = HasAnyDemoSource(e.Data);
-            BridgeService.DebugLog($"OnDragEnter has={has} formats={string.Join(",", e.Data?.GetFormats() ?? Array.Empty<string>())}");
-            e.Effect = has ? DragDropEffects.Copy : DragDropEffects.None;
-            if (has)
-            {
-                bool fromArchive = ExtractRealDemoPaths(e.Data).Length == 0;
-                _bridge.Emit("drag-active", new { active = true, fromArchive });
-            }
+            e.Effect = HasAnyDemoSource(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+            if (e.Effect == DragDropEffects.Copy && e.Data != null) HandleDragEnter(e.Data);
         }
-
-        private void OnDragLeave(object? sender, EventArgs e)
-        {
-            BridgeService.DebugLog("OnDragLeave");
-            _bridge.Emit("drag-active", new { active = false });
-        }
-
+        private void OnDragLeave(object? sender, EventArgs e) => HandleDragLeave();
         private void OnDragDrop(object? sender, DragEventArgs e)
         {
-            BridgeService.DebugLog($"OnDragDrop formats={string.Join(",", e.Data?.GetFormats() ?? Array.Empty<string>())}");
+            if (e.Data != null) HandleDragDrop(e.Data);
+        }
+
+        // Reusable from both the WinForms event handlers (kept as a fallback for the
+        // form's bare margins) and the WebView2-attached IDropTarget.
+
+        internal void HandleDragEnter(WinIDataObject data)
+        {
+            BridgeService.DebugLog($"DragEnter formats={string.Join(",", data.GetFormats())}");
+            if (data is ComIDataObject comEnter) ShellDropResolver.DumpFormats(comEnter, "DragEnter");
+            bool fromArchive = ExtractRealDemoPaths(data).Length == 0;
+            _bridge.Emit("drag-active", new { active = true, fromArchive });
+        }
+
+        internal void HandleDragLeave()
+        {
+            BridgeService.DebugLog("DragLeave");
+            _bridge.Emit("drag-active", new { active = false });
+        }
+
+        // Used by the IDropTarget forwarder when it already resolved the dropped
+        // files (e.g. raw CF_HDROP path) and just needs to notify React.
+        internal void EmitFilesDropped(string[] paths, bool staged)
+        {
+            _bridge.Emit("drag-active", new { active = false });
+            _bridge.Emit("files-dropped", new { paths, staged });
+        }
+
+        internal void HandleDragDrop(WinIDataObject data)
+        {
+            BridgeService.DebugLog($"DragDrop formats={string.Join(",", data.GetFormats())}");
             _bridge.Emit("drag-active", new { active = false });
 
-            var real = ExtractRealDemoPaths(e.Data);
-            BridgeService.DebugLog($"OnDragDrop realPaths={real.Length}");
+            var real = ExtractRealDemoPaths(data);
+            BridgeService.DebugLog($"DragDrop realPaths={real.Length}");
             if (real.Length > 0)
             {
                 _bridge.Emit("files-dropped", new { paths = real, staged = false });
                 return;
             }
 
-            // Virtual files (WinRAR / 7-Zip etc.). Extraction is synchronous on the UI
-            // thread because the OLE IDataObject is only safe to read for the lifetime
-            // of this event, so emit "extracting" + Application.DoEvents() to flush the
-            // overlay into the WebView before the loop blocks the message pump.
-            var names = ReadVirtualDemoNames(e.Data);
+            // Virtual files (WinRAR / 7-Zip CFSTR_FILECONTENTS path). Extraction is
+            // synchronous on the UI thread because the OLE IDataObject is only safe to
+            // read for the lifetime of this event, so emit "extracting" +
+            // Application.DoEvents() to flush the overlay into the WebView before the
+            // loop blocks the message pump.
+            var names = ReadVirtualDemoNames(data);
             int total = names.Count(n => !string.IsNullOrEmpty(n));
-            if (total == 0 || e.Data is not ComIDataObject com) return;
+            BridgeService.DebugLog($"DragDrop virtualNames={total}");
+
+            if (data is not ComIDataObject com)
+            {
+                BridgeService.DebugLog("DragDrop: data is not ComIDataObject");
+                return;
+            }
+
+            if (total == 0)
+            {
+                // Try the Shell namespace path (7-Zip, Explorer ZIP, any IShellFolder
+                // namespace extension). Items arrive as PIDLs in CFSTR_SHELLIDLIST and
+                // we resolve them to IStream via BindToHandler(BHID_Stream).
+                var shellStaging = LocalAppDataFolder.EnsureSubDirectoryExists("drop-staging");
+                _bridge.Emit("extracting", new { active = true, current = 0, total = 1 });
+                Application.DoEvents();
+                var shellPaths = ShellDropResolver.ExtractDemoItems(com, shellStaging);
+                _bridge.Emit("extracting", new { active = false, current = shellPaths.Count, total = shellPaths.Count });
+                BridgeService.DebugLog($"DragDrop shellPaths={shellPaths.Count}");
+                if (shellPaths.Count > 0)
+                    _bridge.Emit("files-dropped", new { paths = shellPaths.ToArray(), staged = true });
+                return;
+            }
 
             _bridge.Emit("extracting", new { active = true, current = 0, total });
             Application.DoEvents();
@@ -387,6 +447,53 @@ namespace SmallDemoManager.GUI
             _bridge.StartupDemo = _startupDemo;
 
             _web.CoreWebView2.Navigate("https://sdm.local/index.html");
+
+            // Once Navigate kicks off WebView2 creates its renderer child window. Wait
+            // for the first non-empty render of the document and then take over its
+            // drop target. NavigationCompleted is a reliable signal that the renderer
+            // HWND is alive.
+            void OnNavigated(object? s, CoreWebView2NavigationCompletedEventArgs e)
+            {
+                _web.CoreWebView2.NavigationCompleted -= OnNavigated;
+                BeginInvoke((Action)InstallWebViewDropTarget);
+            }
+            _web.CoreWebView2.NavigationCompleted += OnNavigated;
+        }
+
+        private void InstallWebViewDropTarget()
+        {
+            // WebView2 nests multiple child HWNDs (Chromium widget host + render-
+            // process surfaces). The OS routes a drop to whichever HWND is under
+            // the cursor at release time — and the cursor can cross between those
+            // children mid-drag — so we register our drop target on every
+            // descendant. Same forwarder instance receives the drop regardless.
+            _dropForwarder = new WebViewDropForwarder(this);
+            _registeredDropHwnds.Clear();
+
+            var descendants = new List<IntPtr> { _web.Handle };
+            EnumChildWindows(_web.Handle, (hWnd, _) => { descendants.Add(hWnd); return true; }, IntPtr.Zero);
+
+            foreach (var h in descendants)
+            {
+                try { RevokeDragDrop(h); } catch { /* none registered — fine */ }
+                int hr = RegisterDragDrop(h, _dropForwarder);
+                if (hr == 0) _registeredDropHwnds.Add(h);
+            }
+
+            BridgeService.DebugLog(
+                $"InstallWebViewDropTarget: registered on {_registeredDropHwnds.Count}/{descendants.Count} HWNDs " +
+                $"[{string.Join(",", _registeredDropHwnds.Select(h => "0x" + h.ToInt64().ToString("X")))}]");
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            foreach (var h in _registeredDropHwnds)
+            {
+                try { RevokeDragDrop(h); } catch { }
+            }
+            _registeredDropHwnds.Clear();
+            _dropForwarder = null;
+            base.OnFormClosed(e);
         }
     }
 }

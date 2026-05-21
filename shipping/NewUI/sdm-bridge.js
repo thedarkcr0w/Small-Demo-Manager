@@ -46,7 +46,10 @@
   // Long-running operations (parse a whole demo, extract all voice tracks)
   // legitimately take many seconds. Give them a generous ceiling so progress
   // events have time to play out.
-  const LONG_OPS = new Set(['parseDemo', 'extractVoice', 'scanAll', 'scanFolder', 'applyUpdate', 'importDroppedBytes']);
+  const LONG_OPS = new Set([
+    'parseDemo', 'extractVoice', 'scanAll', 'scanFolder', 'applyUpdate',
+    'importChunkBegin', 'importChunkData', 'importChunkEnd', 'importDemoFiles',
+  ]);
   const DEFAULT_TIMEOUT_MS = 8000;
   const LONG_TIMEOUT_MS = 10 * 60 * 1000;
 
