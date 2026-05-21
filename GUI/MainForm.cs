@@ -1,8 +1,12 @@
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using SmallDemoManager.Bridge;
 using SmallDemoManager.UtilClass;
+using ComIDataObject = System.Runtime.InteropServices.ComTypes.IDataObject;
+using WinIDataObject = System.Windows.Forms.IDataObject;
 
 namespace SmallDemoManager.GUI
 {
@@ -49,9 +53,221 @@ namespace SmallDemoManager.GUI
             _bridge = new BridgeService(this);
             _bridge.WindowDragRequested = BeginWindowDrag;
 
+            // AllowExternalDrop=false makes WebView2 decline OLE drops, so dragging
+            // a .dem file from Explorer onto the window falls through to the Form.
+            AllowDrop = true;
+            DragEnter += OnDragEnter;
+            DragLeave += OnDragLeave;
+            DragDrop += OnDragDrop;
+
             Load += async (_, _) => await InitializeWebViewAsync();
             HandleCreated += (_, _) => ApplyWindowCorners();
             FormClosed += (_, _) => _bridge.Dispose();
+        }
+
+        // CFSTR_FILEDESCRIPTORW / CFSTR_FILECONTENTS — the shell's virtual-file
+        // drag/drop format used by WinRAR, 7-Zip, the Explorer zip handler, etc.
+        // (Files inside an archive don't exist on disk until you extract them.)
+        private const string CF_FILEDESCRIPTORW = "FileGroupDescriptorW";
+        private const string CF_FILECONTENTS = "FileContents";
+        // FILEDESCRIPTORW: dwFlags(4)+clsid(16)+SIZEL(8)+POINTL(8)+dwFileAttributes(4)
+        //   +3*FILETIME(24)+nFileSizeHigh(4)+nFileSizeLow(4)+WCHAR[260](520) = 592 bytes,
+        //   with cFileName at offset 72.
+        private const int FD_SIZE = 592;
+        private const int FD_NAME_OFFSET = 72;
+        private const int FD_NAME_BYTES = 520;
+
+        [DllImport("ole32.dll")]
+        private static extern void ReleaseStgMedium(ref STGMEDIUM stg);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern ushort RegisterClipboardFormatW(string lpszFormat);
+        [DllImport("kernel32.dll")] private static extern IntPtr GlobalLock(IntPtr h);
+        [DllImport("kernel32.dll")] private static extern bool GlobalUnlock(IntPtr h);
+        [DllImport("kernel32.dll")] private static extern int GlobalSize(IntPtr h);
+
+        private static string[] ExtractRealDemoPaths(WinIDataObject? data)
+        {
+            if (data == null || !data.GetDataPresent(DataFormats.FileDrop)) return Array.Empty<string>();
+            if (data.GetData(DataFormats.FileDrop) is not string[] paths) return Array.Empty<string>();
+            return paths
+                .Where(p => !string.IsNullOrWhiteSpace(p)
+                    && p.EndsWith(".dem", StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(p))
+                .ToArray();
+        }
+
+        private static List<string> ReadVirtualDemoNames(WinIDataObject? data)
+        {
+            var names = new List<string>();
+            if (data == null || !data.GetDataPresent(CF_FILEDESCRIPTORW)) return names;
+            if (data.GetData(CF_FILEDESCRIPTORW) is not MemoryStream desc) return names;
+            var bytes = desc.ToArray();
+            if (bytes.Length < 4) return names;
+            int count = BitConverter.ToInt32(bytes, 0);
+            for (int i = 0; i < count; i++)
+            {
+                int off = 4 + i * FD_SIZE + FD_NAME_OFFSET;
+                if (off + FD_NAME_BYTES > bytes.Length) break;
+                var raw = Encoding.Unicode.GetString(bytes, off, FD_NAME_BYTES);
+                int nul = raw.IndexOf('\0');
+                if (nul >= 0) raw = raw[..nul];
+                if (raw.EndsWith(".dem", StringComparison.OrdinalIgnoreCase)) names.Add(raw);
+                else names.Add(""); // keep index alignment; "" means "skip"
+            }
+            return names;
+        }
+
+        private static string UniqueStagingPath(string dir, string fileName)
+        {
+            var dest = Path.Combine(dir, fileName);
+            if (!File.Exists(dest)) return dest;
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            for (int i = 1; i < 1000; i++)
+            {
+                var c = Path.Combine(dir, $"{stem} ({i}){ext}");
+                if (!File.Exists(c)) return c;
+            }
+            return Path.Combine(dir, Guid.NewGuid().ToString("N") + ext);
+        }
+
+        private static byte[] HGlobalToBytes(IntPtr h)
+        {
+            int size = GlobalSize(h);
+            var ptr = GlobalLock(h);
+            try
+            {
+                var buf = new byte[size];
+                Marshal.Copy(ptr, buf, 0, size);
+                return buf;
+            }
+            finally { GlobalUnlock(h); }
+        }
+
+        private static byte[] IStreamToBytes(IntPtr p)
+        {
+            var stream = (IStream)Marshal.GetObjectForIUnknown(p);
+            try
+            {
+                stream.Stat(out var stat, 0 /* STATFLAG_DEFAULT */);
+                long total = stat.cbSize;
+                using var ms = new MemoryStream(capacity: total > int.MaxValue ? 0 : (int)total);
+                var chunk = new byte[64 * 1024];
+                while (true)
+                {
+                    int read = 0;
+                    IntPtr pcb = Marshal.AllocHGlobal(sizeof(int));
+                    try
+                    {
+                        stream.Read(chunk, chunk.Length, pcb);
+                        read = Marshal.ReadInt32(pcb);
+                    }
+                    finally { Marshal.FreeHGlobal(pcb); }
+                    if (read <= 0) break;
+                    ms.Write(chunk, 0, read);
+                }
+                return ms.ToArray();
+            }
+            finally { Marshal.ReleaseComObject(stream); }
+        }
+
+        private static bool HasAnyDemoSource(WinIDataObject? data)
+        {
+            if (ExtractRealDemoPaths(data).Length > 0) return true;
+            var names = ReadVirtualDemoNames(data);
+            return names.Any(n => !string.IsNullOrEmpty(n));
+        }
+
+        private void OnDragEnter(object? sender, DragEventArgs e)
+        {
+            bool has = HasAnyDemoSource(e.Data);
+            e.Effect = has ? DragDropEffects.Copy : DragDropEffects.None;
+            if (has)
+            {
+                bool fromArchive = ExtractRealDemoPaths(e.Data).Length == 0;
+                _bridge.Emit("drag-active", new { active = true, fromArchive });
+            }
+        }
+
+        private void OnDragLeave(object? sender, EventArgs e)
+        {
+            _bridge.Emit("drag-active", new { active = false });
+        }
+
+        private void OnDragDrop(object? sender, DragEventArgs e)
+        {
+            _bridge.Emit("drag-active", new { active = false });
+
+            var real = ExtractRealDemoPaths(e.Data);
+            if (real.Length > 0)
+            {
+                _bridge.Emit("files-dropped", new { paths = real, staged = false });
+                return;
+            }
+
+            // Virtual files (WinRAR / 7-Zip etc.). Extraction is synchronous on the UI
+            // thread because the OLE IDataObject is only safe to read for the lifetime
+            // of this event, so emit "extracting" + Application.DoEvents() to flush the
+            // overlay into the WebView before the loop blocks the message pump.
+            var names = ReadVirtualDemoNames(e.Data);
+            int total = names.Count(n => !string.IsNullOrEmpty(n));
+            if (total == 0 || e.Data is not ComIDataObject com) return;
+
+            _bridge.Emit("extracting", new { active = true, current = 0, total });
+            Application.DoEvents();
+
+            var staging = LocalAppDataFolder.EnsureSubDirectoryExists("drop-staging");
+            short fcFormat = (short)RegisterClipboardFormatW(CF_FILECONTENTS);
+            var written = new List<string>();
+            int done = 0;
+
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (string.IsNullOrEmpty(names[i])) continue;
+                var fileName = Path.GetFileName(names[i].Replace('/', '\\'));
+                if (string.IsNullOrWhiteSpace(fileName)) { done++; continue; }
+
+                _bridge.Emit("extracting", new {
+                    active = true, current = done, total, file = fileName,
+                });
+                Application.DoEvents();
+
+                var fmt = new FORMATETC
+                {
+                    cfFormat = fcFormat,
+                    ptd = IntPtr.Zero,
+                    dwAspect = DVASPECT.DVASPECT_CONTENT,
+                    lindex = i,
+                    tymed = TYMED.TYMED_HGLOBAL | TYMED.TYMED_ISTREAM,
+                };
+                var stg = default(STGMEDIUM);
+                try
+                {
+                    com.GetData(ref fmt, out stg);
+                    byte[]? content = stg.tymed switch
+                    {
+                        TYMED.TYMED_HGLOBAL => HGlobalToBytes(stg.unionmember),
+                        TYMED.TYMED_ISTREAM => IStreamToBytes(stg.unionmember),
+                        _ => null,
+                    };
+                    if (content != null)
+                    {
+                        var dest = UniqueStagingPath(staging, fileName);
+                        File.WriteAllBytes(dest, content);
+                        written.Add(dest);
+                    }
+                }
+                catch { /* skip entry */ }
+                finally
+                {
+                    if (stg.tymed != TYMED.TYMED_NULL) ReleaseStgMedium(ref stg);
+                    done++;
+                }
+            }
+
+            _bridge.Emit("extracting", new { active = false, current = total, total });
+            if (written.Count > 0)
+                _bridge.Emit("files-dropped", new { paths = written.ToArray(), staged = true });
         }
 
         private void ApplyWindowCorners()

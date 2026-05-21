@@ -777,6 +777,8 @@ function App() {
   const [aboutOpen, setAboutOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [settings, setSettings] = React.useState(() => window.SDM_SETTINGS || { cs2Path: '', moveOnImport: true, autoBackup: false });
+  const [drag, setDrag] = React.useState({ active: false, fromArchive: false });
+  const [extract, setExtract] = React.useState(null); // null | { current, total, file }
   const prevListCollapsedRef = React.useRef(false);
   const parseInFlight = React.useRef(new Set());
 
@@ -922,9 +924,15 @@ function App() {
     if (!selected) return;
     switch (action) {
       case 'move-to-cs2': {
-        const res = await window.SDM?.call('moveToCs2', { demoId: selected.id }).catch(e => ({ ok: false, error: e.message }));
+        const proposed = selected.file.replace(/\.dem$/i, '');
+        const name = window.prompt('Rename demo before moving it to CS2 (without .dem):', proposed);
+        if (name === null) return; // cancelled
+        const trimmed = name.trim();
+        if (!trimmed) { window.__toast?.('Name is required'); return; }
+        const res = await window.SDM?.call('moveToCs2', { demoId: selected.id, newName: trimmed })
+          .catch(e => ({ ok: false, error: e.message }));
         if (res?.ok) {
-          window.__toast?.('Moved to CS2');
+          window.__toast?.(`Moved to CS2 as "${trimmed}.dem"`);
           // Drop the demo from the library list since it's no longer in a watched folder.
           setDemos(ds => ds.filter(d => d.id !== selected.id));
         } else {
@@ -1024,6 +1032,65 @@ function App() {
     });
     return off;
   }, []);
+
+  // Drag-active + extracting status for the drop overlay.
+  React.useEffect(() => {
+    if (!window.SDM) return;
+    const offDrag = window.SDM.on('drag-active', ({ active, fromArchive }) => {
+      setDrag({ active: !!active, fromArchive: !!fromArchive });
+    });
+    const offExtract = window.SDM.on('extracting', (p) => {
+      if (!p || !p.active) setExtract(null);
+      else setExtract({ current: p.current || 0, total: p.total || 0, file: p.file || '' });
+    });
+    return () => { offDrag(); offExtract(); };
+  }, []);
+
+  // Files dragged onto the window → copy into the currently-selected watched
+  // folder (falling back to the first watched folder) and select the import so
+  // the lazy-parse effect kicks off.
+  React.useEffect(() => {
+    if (!window.SDM) return;
+    return window.SDM.on('files-dropped', async ({ paths, staged }) => {
+      if (!Array.isArray(paths) || paths.length === 0) return;
+
+      const isVirtual = (k) => k === '*' || k === 'recent' || k === 'favorites';
+      let target = !isVirtual(activeFolder)
+        ? folders.find(f => f.id === activeFolder)
+        : null;
+      if (!target && folders.length > 0) {
+        target = folders[0];
+        window.__toast?.(`No folder selected — importing into "${target.label}"`);
+      }
+      if (!target) {
+        window.__toast?.('Add a watched folder before importing demos');
+        return;
+      }
+
+      try {
+        const res = await window.SDM.call('importDemoFiles', {
+          folderId: target.id,
+          paths,
+          cleanupSource: !!staged,
+        });
+        const errs = Array.isArray(res?.errors) ? res.errors : [];
+        const imported = (res?.demos || []).map(window.SDM_NORMALIZE_DEMO);
+        if (imported.length === 0) {
+          window.__toast?.(errs[0] || res?.error || 'Import failed');
+          return;
+        }
+        setDemos(ds => {
+          const known = new Set(ds.map(d => d.id));
+          return [...ds, ...imported.filter(d => !known.has(d.id))];
+        });
+        setSelectedId(imported[0].id);
+        const tail = errs.length ? ` (${errs.length} skipped)` : '';
+        window.__toast?.(`Imported ${imported.length} demo${imported.length === 1 ? '' : 's'} into "${target.label}"${tail}`);
+      } catch (e) {
+        window.__toast?.('Import failed: ' + e.message);
+      }
+    });
+  }, [activeFolder, folders]);
 
   // Lazy-parse the selected demo if we only have file-level info so far.
   React.useEffect(() => {
@@ -1173,7 +1240,54 @@ function App() {
           onSave={(s) => setSettings(s)}
         />
       )}
+
+      <DropOverlay drag={drag} extract={extract} folders={folders} activeFolder={activeFolder}/>
     </WindowChrome>
+  );
+}
+
+function DropOverlay({ drag, extract, folders, activeFolder }) {
+  // `extract` is set whenever C# is pulling bytes out of an archive (WinRAR / 7-Zip).
+  // `drag.active` is set whenever a valid .dem-bearing drag is currently over the window.
+  const visible = !!extract || drag.active;
+  if (!visible) return null;
+
+  let title, sub;
+  if (extract) {
+    const { current, total, file } = extract;
+    title = 'Extracting from archive';
+    sub = total > 1
+      ? `Demo ${Math.min(current + 1, total)} of ${total}${file ? ` · ${file}` : ''}`
+      : (file || 'Reading file contents…');
+  } else {
+    const isVirtual = ['*', 'recent', 'favorites'].includes(activeFolder);
+    const target = !isVirtual
+      ? folders.find(f => f.id === activeFolder)
+      : (folders[0] || null);
+    title = drag.fromArchive ? 'Drop to extract & import' : 'Drop to import';
+    sub = target
+      ? `Will land in "${target.label}"`
+      : 'Add a watched folder first';
+  }
+
+  return (
+    <div className="drop-overlay" role="status" aria-live="polite">
+      <div className="drop-overlay-card">
+        <div className="drop-overlay-icon">
+          {extract ? <IconRefresh size={28}/> : <IconDownload size={28}/>}
+        </div>
+        <div className="drop-overlay-title">{title}</div>
+        <div className="drop-overlay-sub">{sub}</div>
+        {extract && extract.total > 0 && (
+          <div className="drop-overlay-bar">
+            <div
+              className="drop-overlay-bar-fill"
+              style={{ width: `${Math.min(100, Math.round((extract.current / Math.max(1, extract.total)) * 100))}%` }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

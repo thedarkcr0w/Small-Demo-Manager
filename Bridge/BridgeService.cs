@@ -192,6 +192,19 @@ namespace SmallDemoManager.Bridge
                     return await MoveToCs2Async(demoId, newName);
                 }
 
+                case "importDemoFiles":
+                {
+                    var folderId = req.Payload.GetProperty("folderId").GetString() ?? "";
+                    var pathsEl = req.Payload.GetProperty("paths");
+                    var paths = pathsEl.EnumerateArray()
+                        .Select(e => e.GetString() ?? "")
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .ToList();
+                    bool cleanupSource = req.Payload.TryGetProperty("cleanupSource", out var cs)
+                        && cs.ValueKind == JsonValueKind.True;
+                    return ImportDemoFiles(folderId, paths, cleanupSource);
+                }
+
                 case "deleteDemo":
                 {
                     var demoId = req.Payload.GetProperty("demoId").GetString() ?? "";
@@ -463,6 +476,77 @@ namespace SmallDemoManager.Bridge
                 Log($"moveToCs2 threw: {ex}");
                 return new { ok = false, error = ex.Message };
             }
+        }
+
+        private object ImportDemoFiles(string folderId, List<string> sourcePaths, bool cleanupSource)
+        {
+            Log($"importDemoFiles folderId={folderId} count={sourcePaths.Count} cleanup={cleanupSource}");
+            var folder = _store.Data.Folders.FirstOrDefault(f => f.Id == folderId);
+            if (folder == null) return new { ok = false, error = "Watched folder not found" };
+            if (!Directory.Exists(folder.Path))
+            {
+                try { Directory.CreateDirectory(folder.Path); }
+                catch (Exception ex)
+                {
+                    return new { ok = false, error = "Folder unavailable: " + ex.Message };
+                }
+            }
+
+            var imported = new List<DemoDto>();
+            var errors = new List<string>();
+            foreach (var src in sourcePaths)
+            {
+                var name = Path.GetFileName(src);
+                if (!File.Exists(src)) { errors.Add($"{name}: not found"); continue; }
+                if (!src.EndsWith(".dem", StringComparison.OrdinalIgnoreCase))
+                { errors.Add($"{name}: not a .dem file"); continue; }
+
+                try
+                {
+                    // If the source is already inside this folder, just index it in place
+                    // rather than copying onto itself.
+                    var dest = string.Equals(Path.GetDirectoryName(src), folder.Path,
+                        StringComparison.OrdinalIgnoreCase)
+                        ? src
+                        : ResolveUniquePath(folder.Path, name);
+
+                    if (dest != src) File.Copy(src, dest, overwrite: false);
+
+                    var fi = new FileInfo(dest);
+                    var meta = _store.UpsertDemo(folder.Id, fi);
+                    imported.Add(DemoIndex.BuildDto(meta, folder, fi));
+
+                    // Only delete the source if it was a staged copy (e.g., extracted from
+                    // an archive into our drop-staging dir) and we actually copied it elsewhere.
+                    if (cleanupSource && dest != src)
+                    {
+                        try { File.Delete(src); }
+                        catch (Exception ex) { Log($"importDemoFiles cleanup failed for {src}: {ex.Message}"); }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"importDemoFiles failed for {src}: {ex.Message}");
+                    errors.Add($"{name}: {ex.Message}");
+                }
+            }
+
+            _store.Save();
+            return new { ok = imported.Count > 0, demos = imported, errors };
+        }
+
+        private static string ResolveUniquePath(string folder, string fileName)
+        {
+            var dest = Path.Combine(folder, fileName);
+            if (!File.Exists(dest)) return dest;
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            for (int i = 1; i < 1000; i++)
+            {
+                var candidate = Path.Combine(folder, $"{stem} ({i}){ext}");
+                if (!File.Exists(candidate)) return candidate;
+            }
+            throw new IOException("No unique filename available");
         }
 
         private object DeleteDemo(string demoId)

@@ -1640,3 +1640,76 @@ body { min-height: 100vh; display: flex; align-items: stretch; justify-content: 
   font-size: 11px; color: var(--mut);
   line-height: 1.4;
 }
+
+/* ── Drag/drop overlay ──────────────────────────────────────────────────── */
+/* pointer-events: none keeps OLE drag/drop hit-testing on the host form. */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 7, 9, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  pointer-events: none;
+  animation: drop-overlay-in .12s ease-out;
+}
+@keyframes drop-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.drop-overlay-card {
+  min-width: 320px;
+  max-width: 460px;
+  padding: 28px 32px;
+  border: 2px dashed var(--acc);
+  border-radius: 14px;
+  background: rgba(16, 18, 22, 0.94);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.drop-overlay-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--acc-soft);
+  color: var(--acc);
+  margin-bottom: 4px;
+}
+.drop-overlay-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+.drop-overlay-sub {
+  font-size: 12px;
+  color: var(--sec);
+  font-family: 'JetBrains Mono', monospace;
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drop-overlay-bar {
+  margin-top: 10px;
+  width: 240px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surf-2);
+  overflow: hidden;
+}
+.drop-overlay-bar-fill {
+  height: 100%;
+  background: var(--acc);
+  transition: width .12s linear;
+}
