@@ -396,3 +396,7 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Claude Code — local agent config and project instructions
+.claude/
+CLAUDE.md

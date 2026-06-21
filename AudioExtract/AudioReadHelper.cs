@@ -18,7 +18,10 @@ namespace SmallDemoManager.AudioExtract
             string userFolderPath = Path.Combine(audioFolderPath, subFolderName);
             if (!Directory.Exists(userFolderPath)) return result;
 
-            string[] files = Directory.GetFiles(userFolderPath, "*.wav");
+            string[] files = Directory.EnumerateFiles(userFolderPath)
+                .Where(f => f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)
+                         || f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
             var regex = new Regex(@"round_(\d+)_t_(\d+)s", RegexOptions.IgnoreCase);
 
             foreach (var file in files)
@@ -29,7 +32,7 @@ namespace SmallDemoManager.AudioExtract
 
                 int round = int.Parse(match.Groups[1].Value);
                 int seconds = int.Parse(match.Groups[2].Value);
-                double duration = GetWavDuration(file);
+                double duration = GetAudioDuration(file);
 
                 result.Add(new AudioEntry
                 {
@@ -79,7 +82,7 @@ namespace SmallDemoManager.AudioExtract
             }
         }
 
-        private static double GetWavDuration(string filePath)
+        private static double GetAudioDuration(string filePath)
         {
             using var reader = new AudioFileReader(filePath);
             return reader.TotalTime.TotalSeconds;

@@ -1,5 +1,7 @@
 ﻿using Concentus;
 using DemoFile;
+using NAudio.MediaFoundation;
+using NAudio.Wave;
 using SmallDemoManager.HelperClass;
 using SmallDemoManager.UtilClass;
 using System.Diagnostics;
@@ -14,15 +16,29 @@ namespace SmallDemoManager.AudioExtract
     public static class AudioExtractor
     {
         /// <summary>
-        /// Extracts voice data from a demo file into WAV segments organized by player.
+        /// Extracts voice data from a demo file into audio segments organized by player.
         /// </summary>
         /// <param name="demoPath">Full path to the .dem file.</param>
+        /// <param name="format">Output audio format: "wav" (uncompressed) or "mp3".</param>
+        /// <param name="bitrate">Target MP3 bitrate, e.g. "192k" (ignored for WAV).</param>
         /// <param name="progress">Optional progress reporter (0 to 1).</param>
         /// <returns>True if extraction succeeds, otherwise false.</returns>
-        public static async Task<bool> ExtractAsync(string demoPath, IProgress<float>? progress = null)
+        public static async Task<bool> ExtractAsync(string demoPath, string format = "wav", string bitrate = "192k", IProgress<float>? progress = null)
         {
+            // Only WAV and MP3 are supported; anything else falls back to WAV.
+            format = (format ?? "wav").Trim().ToLowerInvariant();
+            if (format != "mp3") format = "wav";
+            int bitrateBps = ParseBitrate(bitrate);
+
+            bool mediaFoundationStarted = false;
             try
             {
+                if (format == "mp3")
+                {
+                    MediaFoundationApi.Startup();
+                    mediaFoundationStarted = true;
+                }
+
                 var demo = new CsDemoParser();
                 var demoFileReader = new DemoFileReader<CsDemoParser>(demo, new MemoryStream(File.ReadAllBytes(demoPath)));
 
@@ -66,6 +82,14 @@ namespace SmallDemoManager.AudioExtract
 
                 string demoName = Path.GetFileNameWithoutExtension(demoPath);
                 string baseOutputDir = Path.Combine(AppContext.BaseDirectory, audioFolder, demoName);
+
+                // Start each extraction from a clean slate so stale clips — e.g. from a
+                // previous run in a different format, or players who have since left —
+                // don't linger and produce duplicate / mismatched-format rows in the UI.
+                if (Directory.Exists(baseOutputDir))
+                {
+                    try { Directory.Delete(baseOutputDir, recursive: true); } catch { /* locked file: best effort */ }
+                }
 
                 int totalPlayers = voiceDataPerSteamId.Count;
                 int playerIndex = 0;
@@ -124,8 +148,8 @@ namespace SmallDemoManager.AudioExtract
                         if (allSamples.Count > 0)
                         {
                             float startSeconds = startTick / (float)CsDemoParser.TickRate;
-                            string filename = Path.Combine(outputDir, $"round_{currentSegment[0].round}_t_{(int)startSeconds}s.wav");
-                            WriteWavFile(filename, sampleRate, numChannels, allSamples.ToArray());
+                            string filename = Path.Combine(outputDir, $"round_{currentSegment[0].round}_t_{(int)startSeconds}s.{format}");
+                            WriteAudioFile(filename, format, bitrateBps, sampleRate, numChannels, allSamples.ToArray());
                         }
 
                         currentSegment.Clear();
@@ -156,6 +180,10 @@ namespace SmallDemoManager.AudioExtract
             {
                 return false;
             }
+            finally
+            {
+                if (mediaFoundationStarted) MediaFoundationApi.Shutdown();
+            }
         }
 
         /// <summary>
@@ -166,6 +194,36 @@ namespace SmallDemoManager.AudioExtract
             foreach (char c in Path.GetInvalidFileNameChars())
                 name = name.Replace(c, '_');
             return name;
+        }
+
+        /// <summary>
+        /// Parses a bitrate string such as "192k" into bits-per-second (192000).
+        /// Falls back to 192 kbps when the value can't be parsed.
+        /// </summary>
+        static int ParseBitrate(string? bitrate)
+        {
+            var digits = new string((bitrate ?? "").Where(char.IsDigit).ToArray());
+            if (int.TryParse(digits, out var kbps) && kbps > 0) return kbps * 1000;
+            return 192000;
+        }
+
+        /// <summary>
+        /// Writes decoded PCM samples to disk in the requested format.
+        /// WAV is written directly; MP3 is encoded via Windows Media Foundation.
+        /// </summary>
+        static void WriteAudioFile(string filePath, string format, int bitrateBps, int sampleRate, int numChannels, short[] samples)
+        {
+            if (format == "mp3")
+            {
+                var waveFormat = new WaveFormat(sampleRate, 16, numChannels);
+                byte[] pcmBytes = MemoryMarshal.AsBytes(samples.AsSpan()).ToArray();
+                using var pcmStream = new RawSourceWaveStream(pcmBytes, 0, pcmBytes.Length, waveFormat);
+                MediaFoundationEncoder.EncodeToMp3(pcmStream, filePath, bitrateBps);
+            }
+            else
+            {
+                WriteWavFile(filePath, sampleRate, numChannels, samples);
+            }
         }
 
         /// <summary>

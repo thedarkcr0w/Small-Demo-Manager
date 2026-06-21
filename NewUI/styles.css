@@ -1137,7 +1137,35 @@ body { min-height: 100vh; display: flex; align-items: stretch; justify-content: 
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 600;
+  flex-shrink: 0;
 }
+/* Saved-clips column header carries an inline search box between title and count. */
+.vx-col-head-search > span:first-child { flex-shrink: 0; }
+.vx-search-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex; align-items: center; gap: 7px;
+  margin: 0 10px;
+  height: 28px;
+  padding: 0 9px;
+  background: var(--surf-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  transition: border-color .1s;
+}
+.vx-search-wrap:focus-within { border-color: var(--acc); }
+.vx-search {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  outline: 0;
+}
+.vx-search::placeholder { color: var(--mut); font-weight: 500; }
 .vx-col-body {
   flex: 1;
   overflow-y: auto;

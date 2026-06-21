@@ -189,7 +189,11 @@ namespace SmallDemoManager.Bridge
                 case "extractVoice":
                 {
                     var demoId = req.Payload.GetProperty("demoId").GetString() ?? "";
-                    return await ExtractVoiceAsync(demoId);
+                    var format = req.Payload.TryGetProperty("format", out var fmtEl) && fmtEl.ValueKind == JsonValueKind.String
+                        ? (fmtEl.GetString() ?? "wav") : "wav";
+                    var bitrate = req.Payload.TryGetProperty("bitrate", out var brEl) && brEl.ValueKind == JsonValueKind.String
+                        ? (brEl.GetString() ?? "192k") : "192k";
+                    return await ExtractVoiceAsync(demoId, format, bitrate);
                 }
 
                 case "listVoiceClips":
@@ -464,7 +468,7 @@ namespace SmallDemoManager.Bridge
             return new { demos = allDemos };
         }
 
-        private async Task<object?> ExtractVoiceAsync(string demoId)
+        private async Task<object?> ExtractVoiceAsync(string demoId, string format, string bitrate)
         {
             var meta = _store.GetDemo(demoId);
             if (meta == null || !File.Exists(meta.FullPath)) return null;
@@ -474,7 +478,7 @@ namespace SmallDemoManager.Bridge
             var progress = new Progress<float>(p =>
                 Emit("extract-progress", new { demoId, p }));
 
-            var ok = await AudioExtractor.ExtractAsync(meta.FullPath, progress);
+            var ok = await AudioExtractor.ExtractAsync(meta.FullPath, format, bitrate, progress);
             if (!ok) return new { ok = false, clips = Array.Empty<VoiceClipDto>() };
 
             return new { ok = true, clips = ListVoiceClips(demoId) };
@@ -525,6 +529,8 @@ namespace SmallDemoManager.Bridge
                 foreach (var entry in entries)
                 {
                     if (entry.FilePath == null) continue;
+                    var fileFormat = Path.GetExtension(entry.FilePath).TrimStart('.').ToLowerInvariant();
+                    if (string.IsNullOrEmpty(fileFormat)) fileFormat = "wav";
                     clips.Add(new VoiceClipDto
                     {
                         Id = LibraryStore.MakeDemoId(entry.FilePath),
@@ -533,7 +539,7 @@ namespace SmallDemoManager.Bridge
                         Round = entry.Round,
                         DemoSec = (int)entry.Time.TotalSeconds,
                         Dur = Math.Round(entry.DurationSeconds, 2),
-                        Format = "wav",
+                        Format = fileFormat,
                         Path = entry.FilePath,
                     });
                 }

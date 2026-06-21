@@ -180,6 +180,7 @@ function VoiceExtractorPanel({ demo, onBack }) {
   const [playProgress, setPlayProgress] = React.useState({});
   const [format, setFormat] = React.useState('wav');
   const [bitrate, setBitrate] = React.useState('192k');
+  const [clipQuery, setClipQuery] = React.useState(''); // filters the saved-clips list by player
 
   const selected = players.find(p => p.name === selectedPlayer);
   // Match by SteamID when present (robust to name sanitization), otherwise by name.
@@ -192,12 +193,20 @@ function VoiceExtractorPanel({ demo, onBack }) {
     [saved, selected?.name, selected?.steamId]
   );
 
+  // Saved-clips list filtered by the search box (player name, case-insensitive).
+  const filteredSaved = React.useMemo(() => {
+    const q = clipQuery.trim().toLowerCase();
+    if (!q) return saved;
+    return saved.filter(s => (s.player || '').toLowerCase().includes(q));
+  }, [saved, clipQuery]);
+
   // Reset state when demo changes, then load any clips already on disk for this demo.
   React.useEffect(() => {
     setSaved([]);
     setSelectedPlayer(players[0]?.name);
     setExtracting(false);
     setExtractProgress(0);
+    setClipQuery('');
     if (window.SDM?.hasHost) {
       window.SDM.call('listVoiceClips', { demoId: demo.id })
         .then(list => setSaved((list || []).map(c => ({ ...c }))))
@@ -257,7 +266,7 @@ function VoiceExtractorPanel({ demo, onBack }) {
     setExtracting(true);
     setExtractProgress(1);
     try {
-      const res = await window.SDM.call('extractVoice', { demoId: demo.id });
+      const res = await window.SDM.call('extractVoice', { demoId: demo.id, format, bitrate });
       if (res?.ok) {
         setSaved((res.clips || []).map(c => ({ ...c })));
         const mine = (res.clips || []).filter(c => c.player === selected.name).length;
@@ -297,12 +306,16 @@ function VoiceExtractorPanel({ demo, onBack }) {
             <select value={format} onChange={(e) => setFormat(e.target.value)}>
               <option value="wav">WAV</option>
               <option value="mp3">MP3</option>
-              <option value="ogg">OGG</option>
             </select>
           </label>
           <label>
             <span>Bitrate</span>
-            <select value={bitrate} onChange={(e) => setBitrate(e.target.value)}>
+            <select
+              value={bitrate}
+              disabled={format === 'wav'}
+              title={format === 'wav' ? 'WAV is uncompressed — bitrate applies to MP3 only' : undefined}
+              onChange={(e) => setBitrate(e.target.value)}
+            >
               <option>96k</option>
               <option>128k</option>
               <option>192k</option>
@@ -389,9 +402,23 @@ function VoiceExtractorPanel({ demo, onBack }) {
 
         {/* Column 3: Saved files */}
         <div className="vx-col vx-col-wide">
-          <div className="vx-col-head">
+          <div className="vx-col-head vx-col-head-search">
             <span>Saved Audio-Voice files</span>
-            <span className="vx-col-count">{saved.length}</span>
+            <div className="vx-search-wrap">
+              <IconSearch size={14} style={{ color: 'var(--mut)', flexShrink: 0 }}/>
+              <input
+                className="vx-search"
+                placeholder="Search clips by player…"
+                value={clipQuery}
+                onChange={(e) => setClipQuery(e.target.value)}
+              />
+              {clipQuery && (
+                <button className="ic-btn" onClick={() => setClipQuery('')} aria-label="Clear search">
+                  <IconClose size={12}/>
+                </button>
+              )}
+            </div>
+            <span className="vx-col-count">{filteredSaved.length}</span>
           </div>
           <div className="vx-col-body vx-saved-body">
             {saved.length === 0 && (
@@ -403,7 +430,16 @@ function VoiceExtractorPanel({ demo, onBack }) {
                 </div>
               </div>
             )}
-            {saved.map(s => {
+            {saved.length > 0 && filteredSaved.length === 0 && (
+              <div className="vx-empty vx-empty-saved">
+                <IconSearch size={20} style={{ color: 'var(--mut-2)', marginBottom: 8 }}/>
+                <div style={{ fontWeight: 600, color: 'var(--sec)', marginBottom: 2 }}>No matches</div>
+                <div style={{ fontSize: 11, color: 'var(--mut)' }}>
+                  No clips for “{clipQuery}”.
+                </div>
+              </div>
+            )}
+            {filteredSaved.map(s => {
               const isPlaying = playing === s.id;
               const prog = playProgress[s.id] || 0;
               return (
