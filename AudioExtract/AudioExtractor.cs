@@ -19,21 +19,24 @@ namespace SmallDemoManager.AudioExtract
         /// Extracts voice data from a demo file into audio segments organized by player.
         /// </summary>
         /// <param name="demoPath">Full path to the .dem file.</param>
-        /// <param name="format">Output audio format: "wav" (uncompressed) or "mp3".</param>
-        /// <param name="bitrate">Target MP3 bitrate, e.g. "192k" (ignored for WAV).</param>
+        /// <param name="format">Output audio format: "wav" (uncompressed), "mp3" (lossy), or "flac" (lossless).</param>
+        /// <param name="bitrate">Target MP3 bitrate, e.g. "192k" (ignored for WAV and FLAC).</param>
         /// <param name="progress">Optional progress reporter (0 to 1).</param>
         /// <returns>True if extraction succeeds, otherwise false.</returns>
         public static async Task<bool> ExtractAsync(string demoPath, string format = "wav", string bitrate = "192k", IProgress<float>? progress = null)
         {
-            // Only WAV and MP3 are supported; anything else falls back to WAV.
+            // Supported formats: WAV (direct), MP3 and FLAC (via Media Foundation).
+            // Anything else falls back to WAV.
             format = (format ?? "wav").Trim().ToLowerInvariant();
-            if (format != "mp3") format = "wav";
+            if (format != "mp3" && format != "flac") format = "wav";
             int bitrateBps = ParseBitrate(bitrate);
 
+            // MP3 and FLAC are both encoded through Media Foundation.
+            bool usesMediaFoundation = format is "mp3" or "flac";
             bool mediaFoundationStarted = false;
             try
             {
-                if (format == "mp3")
+                if (usesMediaFoundation)
                 {
                     MediaFoundationApi.Startup();
                     mediaFoundationStarted = true;
@@ -207,23 +210,63 @@ namespace SmallDemoManager.AudioExtract
             return 192000;
         }
 
+        // Media Foundation audio subtype GUID for FLAC (MFAudioFormat_FLAC).
+        static readonly Guid FlacSubtype = new("0000F1AC-0000-0010-8000-00AA00389B71");
+
         /// <summary>
         /// Writes decoded PCM samples to disk in the requested format.
-        /// WAV is written directly; MP3 is encoded via Windows Media Foundation.
+        /// WAV is written directly; MP3 and FLAC are encoded via Windows Media Foundation.
         /// </summary>
         static void WriteAudioFile(string filePath, string format, int bitrateBps, int sampleRate, int numChannels, short[] samples)
         {
-            if (format == "mp3")
+            switch (format)
             {
-                var waveFormat = new WaveFormat(sampleRate, 16, numChannels);
-                byte[] pcmBytes = MemoryMarshal.AsBytes(samples.AsSpan()).ToArray();
-                using var pcmStream = new RawSourceWaveStream(pcmBytes, 0, pcmBytes.Length, waveFormat);
-                MediaFoundationEncoder.EncodeToMp3(pcmStream, filePath, bitrateBps);
+                case "mp3":
+                {
+                    var waveFormat = new WaveFormat(sampleRate, 16, numChannels);
+                    byte[] pcmBytes = MemoryMarshal.AsBytes(samples.AsSpan()).ToArray();
+                    using var pcmStream = new RawSourceWaveStream(pcmBytes, 0, pcmBytes.Length, waveFormat);
+                    MediaFoundationEncoder.EncodeToMp3(pcmStream, filePath, bitrateBps);
+                    break;
+                }
+                case "flac":
+                {
+                    var waveFormat = new WaveFormat(sampleRate, 16, numChannels);
+                    byte[] pcmBytes = MemoryMarshal.AsBytes(samples.AsSpan()).ToArray();
+                    using var pcmStream = new RawSourceWaveStream(pcmBytes, 0, pcmBytes.Length, waveFormat);
+                    EncodeToFlac(pcmStream, filePath, sampleRate, numChannels);
+                    break;
+                }
+                default:
+                    WriteWavFile(filePath, sampleRate, numChannels, samples);
+                    break;
             }
-            else
-            {
-                WriteWavFile(filePath, sampleRate, numChannels, samples);
-            }
+        }
+
+        /// <summary>
+        /// Encodes PCM to a lossless FLAC file via the Windows Media Foundation FLAC encoder
+        /// (available on Windows 10 1607+). NAudio has no dedicated FLAC helper, so we pick the
+        /// encoder output media type that matches the decoded voice stream (48 kHz / mono / 16-bit).
+        /// FLAC is lossless, so the MP3 bitrate does not apply.
+        /// </summary>
+        static void EncodeToFlac(IWaveProvider input, string filePath, int sampleRate, int numChannels)
+        {
+            var outputType = MediaFoundationEncoder.GetOutputMediaTypes(FlacSubtype)
+                .FirstOrDefault(mt => TryField(() => mt.SampleRate) == sampleRate
+                                   && TryField(() => mt.ChannelCount) == numChannels
+                                   && TryField(() => mt.BitsPerSample) == 16)
+                ?? throw new InvalidOperationException(
+                    "No compatible FLAC encoder is available on this system (requires Windows 10 or newer).");
+
+            using var encoder = new MediaFoundationEncoder(outputType);
+            encoder.Encode(filePath, input);
+        }
+
+        // Reading a media-type field can throw when the attribute is absent; treat that as "no match".
+        static int TryField(Func<int> read)
+        {
+            try { return read(); }
+            catch { return -1; }
         }
 
         /// <summary>

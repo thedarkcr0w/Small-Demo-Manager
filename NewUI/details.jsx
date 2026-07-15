@@ -306,14 +306,15 @@ function VoiceExtractorPanel({ demo, onBack }) {
             <select value={format} onChange={(e) => setFormat(e.target.value)}>
               <option value="wav">WAV</option>
               <option value="mp3">MP3</option>
+              <option value="flac">FLAC</option>
             </select>
           </label>
           <label>
             <span>Bitrate</span>
             <select
               value={bitrate}
-              disabled={format === 'wav'}
-              title={format === 'wav' ? 'WAV is uncompressed — bitrate applies to MP3 only' : undefined}
+              disabled={format !== 'mp3'}
+              title={format !== 'mp3' ? 'Bitrate applies to MP3 only — WAV and FLAC are lossless' : undefined}
               onChange={(e) => setBitrate(e.target.value)}
             >
               <option>96k</option>

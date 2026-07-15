@@ -20,7 +20,8 @@ namespace SmallDemoManager.AudioExtract
 
             string[] files = Directory.EnumerateFiles(userFolderPath)
                 .Where(f => f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)
-                         || f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                         || f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+                         || f.EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             var regex = new Regex(@"round_(\d+)_t_(\d+)s", RegexOptions.IgnoreCase);
 
@@ -85,7 +86,18 @@ namespace SmallDemoManager.AudioExtract
         private static double GetAudioDuration(string filePath)
         {
             using var reader = new AudioFileReader(filePath);
-            return reader.TotalTime.TotalSeconds;
+            var seconds = reader.TotalTime.TotalSeconds;
+            if (seconds > 0) return seconds;
+
+            // Windows Media Foundation writes FLAC files without a total-sample count in the
+            // STREAMINFO header, so MediaFoundationReader reports a zero duration even though the
+            // audio is intact. Fall back to decoding the stream and counting samples.
+            long sampleFrames = 0;
+            int channels = Math.Max(1, reader.WaveFormat.Channels);
+            var buffer = new float[reader.WaveFormat.SampleRate * channels];
+            int read;
+            while ((read = reader.Read(buffer, 0, buffer.Length)) > 0) sampleFrames += read;
+            return (double)sampleFrames / reader.WaveFormat.SampleRate / channels;
         }
     }
 }
