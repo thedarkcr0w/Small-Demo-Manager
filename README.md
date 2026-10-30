@@ -20,8 +20,9 @@ in-game spectator commands — with the familiar dark/amber design, rebuilt in R
 ---
 
 > [!NOTE]
-> **2.0.0 is the Rust rewrite.** If you're coming from 1.x, download the Windows
-> ZIP below. The old app's data files are left intact. See the
+> **2.x is the Rust rewrite.** If you're coming from 1.x, download the Windows
+> ZIP below and add your demo folders. The old app's library and settings are
+> ignored, not deleted. See the
 > [patch notes](PATCHNOTES.md) for the changes and known issues.
 
 ## ✨ Features
@@ -33,7 +34,7 @@ in-game spectator commands — with the familiar dark/amber design, rebuilt in R
 | 🏆 **Match details** | Recorded scoreboards, K/D/A, damage, ADR, and observed round results. Missing data stays unavailable — no invented IDs, ratings, or stats. |
 | 🎙️ **Per-player voice extractor** | Extract one player or everyone to WAV, with measured waveforms and native audio playback. Previous extractions are kept. |
 | 📣 **Spectator voice commands** | Select players and copy the correct low/high `tv_listen_voice_indices` masks. Profile links use recorded SteamIDs. |
-| 🗂️ **Tags, notes & favorites** | Save annotations locally; in-app renames and transfers preserve them. Reads supported annotations from the old app without overwriting its files. |
+| 🗂️ **Tags, notes & favorites** | Save annotations in the native library; in-app renames and transfers preserve them. The old app's library is not imported. |
 | 🪟 **Copy or move to CS2** | Copy by default, or move with an optional backup. SHA-256 verification happens before removing the source; existing files are never overwritten. |
 | 🎯 **Auto-detect CS2 install** | Finds Steam libraries and checks for a real CS2 game directory. |
 | 🖱️ **Drag-and-drop import** | Import `.dem` files and ZIP archives, keeping the originals. Extract RAR/7z archives first. |
@@ -63,7 +64,7 @@ not release-tested.
 
 ## 📥 Installation
 
-1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.0.0/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
+1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.0.1/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
 2. Extract the ZIP to a folder and run **`SmallDemoManager.exe`**.
 3. Add your demo folder, then open **Settings** to configure the CS2 destination.
 
@@ -74,8 +75,11 @@ under `%LocalAppData%\Small-Demo-Manager\`:
 * `Audio.native/` — extracted WAV clips, separated by demo and extraction run.
 * `Backups.native/` — optional verified backups before moving demos.
 
-Existing `Library.json`, `Config.json`, and legacy `Audio/` are not modified.
+Existing `Library.json`, `Config.json`, and legacy `Audio/` are ignored and not modified.
 Old WAVs remain on disk but are not automatically added to the native clip browser.
+Folders imported from the old app by 2.0.0 are no longer watched; add only the
+folders you want to use. Their previously imported annotations are kept inactive
+in the native data file. Background parsing is off until enabled in Settings.
 
 ### App updates
 
@@ -111,11 +115,11 @@ CLI diagnostics, and the source layout.
 
 ## 📝 Patch Notes
 
-**30.10.2026 — 2.0.0**
+**31.10.2026 — 2.0.1**
 
-* Rebuilt the app in Rust while keeping the dark/amber design.
-* Fixed demo decoding, voice-clip grouping, folder watching, and safe file transfers.
-* Removed fabricated data and unsupported controls.
+* Fixed startup and rescan stalls with large demo libraries.
+* Stopped importing the old library; background parsing is now opt-in.
+* Removed bundled documentation and screenshots from the Windows ZIP.
 
 Read the [full patch notes and previous dated updates](PATCHNOTES.md).
 

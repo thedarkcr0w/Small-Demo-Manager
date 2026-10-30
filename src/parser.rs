@@ -29,7 +29,11 @@ pub fn parse(
     progress: Progress,
     audio: Option<AudioWriter>,
 ) -> Result<Parsed> {
-    files::validate_demo(path)?;
+    // Header/envelope validation and sign-on data do not have a tick percentage.
+    // Show indeterminate progress instead of a misleading 0%, and allow Cancel
+    // before the entity decoder has reached its first normal tick.
+    progress(-1.0);
+    files::validate_demo_cancellable(path, &cancel)?;
     let before = files::stamp(path)?;
     // A bad upstream decoder must not unwind through the native event loop.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<Parsed> {
@@ -205,6 +209,19 @@ fn event_int(event: &GameEvent<'_>, name: &str) -> Option<i32> {
 }
 
 impl MatchObserver {
+    fn report_progress(&mut self, tick: u32) -> ObserverResult {
+        ensure!(!self.cancel.load(Ordering::Relaxed), "Operation cancelled");
+        if self.last_progress.elapsed() >= Duration::from_millis(100) {
+            (self.progress)(if self.total_ticks > 0 && tick > 0 && tick != u32::MAX {
+                (tick as f32 / self.total_ticks as f32).clamp(0.0, 0.999)
+            } else {
+                -1.0
+            });
+            self.last_progress = Instant::now();
+        }
+        Ok(())
+    }
+
     fn snapshot(&mut self, ctx: &source2_demo::Context) {
         if let Ok(rules) = ctx.entities().get_by_class_name("CCSGameRulesProxy") {
             self.warmup = flag(rules, "m_pGameRules.m_bWarmupPeriod").unwrap_or(false);
@@ -352,10 +369,11 @@ impl Observer for MatchObserver {
 
     fn on_demo_command(
         &mut self,
-        _ctx: &source2_demo::Context,
+        ctx: &source2_demo::Context,
         kind: EDemoCommands,
         bytes: &[u8],
     ) -> ObserverResult {
+        self.report_progress(ctx.tick())?;
         if kind == EDemoCommands::DemFileHeader {
             let header = CDemoFileHeader::decode(bytes)?;
             ensure!(
@@ -420,7 +438,7 @@ impl Observer for MatchObserver {
     }
 
     fn on_tick_end(&mut self, ctx: &source2_demo::Context) -> ObserverResult {
-        ensure!(!self.cancel.load(Ordering::Relaxed), "Operation cancelled");
+        self.report_progress(ctx.tick())?;
         if ctx.tick() == u32::MAX {
             return Ok(());
         }
@@ -428,14 +446,6 @@ impl Observer for MatchObserver {
         // One snapshot per recorded second, plus every round boundary.
         if ctx.tick().is_multiple_of(64) {
             self.snapshot(ctx);
-        }
-        if self.last_progress.elapsed() >= Duration::from_millis(100) {
-            (self.progress)(if self.total_ticks > 0 {
-                (ctx.tick() as f32 / self.total_ticks as f32).clamp(0.0, 0.999)
-            } else {
-                -1.0 // Unknown total: the UI shows a spinner, not invented progress.
-            });
-            self.last_progress = Instant::now();
         }
         Ok(())
     }
@@ -573,6 +583,45 @@ mod tests {
         );
         assert!(result.is_err());
         assert_eq!(files::hash_file(&path).expect("hash"), before);
+    }
+
+    #[test]
+    fn cancellation_can_stop_preflight_before_the_first_tick() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("preflight.dem");
+        minimal_demo(&path, false);
+        let before = files::hash_file(&path).expect("hash");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let signal = cancel.clone();
+        let result = parse(
+            &path,
+            cancel,
+            Arc::new(move |progress| {
+                assert!(progress < 0.0, "preflight has no tick percentage");
+                signal.store(true, Ordering::Relaxed);
+            }),
+            None,
+        );
+        assert!(format!("{:#}", result.err().expect("cancelled")).contains("cancelled"));
+        assert_eq!(files::hash_file(&path).expect("hash"), before);
+    }
+
+    #[test]
+    fn signon_progress_is_indeterminate_and_cancel_does_not_require_a_tick() {
+        let values = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let output = values.clone();
+        let mut observer = MatchObserver {
+            total_ticks: 100,
+            progress: Arc::new(move |value| output.lock().expect("progress").push(value)),
+            last_progress: Instant::now() - Duration::from_secs(1),
+            ..Default::default()
+        };
+        observer.report_progress(0).expect("signon");
+        observer.last_progress = Instant::now() - Duration::from_secs(1);
+        observer.report_progress(50).expect("recorded tick");
+        assert_eq!(*values.lock().expect("progress"), [-1.0, 0.5]);
+        observer.cancel.store(true, Ordering::Relaxed);
+        assert!(observer.report_progress(0).is_err());
     }
 
     #[test]

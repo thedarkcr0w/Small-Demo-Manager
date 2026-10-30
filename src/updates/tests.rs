@@ -334,7 +334,21 @@ fn packaged_release_passes_the_actual_updater_validation() {
         &AtomicBool::new(false),
     )
     .expect("real package validation");
-    assert!(files.len() > 10);
+    let mut actual: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
+    actual.sort_unstable();
+    let mut expected = vec![
+        EXECUTABLE,
+        MANIFEST,
+        "LICENSE",
+        "THIRD-PARTY-NOTICES.md",
+        "LICENSES/Small-Demo-Manager-original-MIT.txt",
+        "LICENSES/dependencies/INDEX.md",
+    ];
+    expected.sort_unstable();
+    assert_eq!(
+        actual, expected,
+        "release ZIP must not contain documentation or screenshots"
+    );
     assert_eq!(files.last().expect("last").path, EXECUTABLE);
 }
 

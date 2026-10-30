@@ -29,8 +29,9 @@ updater script, or extra runtime to install. Move the app to a folder you own or
 extract the release ZIP manually if permissions prevent updating.
 
 Updates do not replace your demos, `Library.native.json`, notes, tags, favorites,
-or saved audio. Unmanaged installation files are left alone. The package's
-README, patch notes, license notices, and docs are updated with its executable.
+or saved audio. Unmanaged installation files are left alone. From 2.0.1 onward,
+only the executable, update manifest and license notices are shipped. Documentation
+from older installations is left in place rather than deleting potentially edited files.
 
 ## Publishing a compatible release
 
@@ -60,6 +61,12 @@ Do not edit the ZIP after generating its checksum. The checksum sidecar contains
 the archive hash and filename. Required original/dependency license notices must
 remain in the package. Uploading the old `SmallDemoManager-shipping.zip` does not
 make an update eligible for this app.
+
+The compact ZIP retains `THIRD-PARTY-NOTICES.md`,
+`LICENSES/Small-Demo-Manager-original-MIT.txt`, and `LICENSES/dependencies/INDEX.md`
+because the 2.0.0 updater requires those exact paths. Full dependency, font and
+compiler/runtime license texts are consolidated into the notices file instead of
+shipping hundreds of separate files. No application docs or readmes are required.
 
 ## Trust and verification
 

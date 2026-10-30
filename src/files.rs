@@ -3,8 +3,9 @@ use anyhow::{Context, Result, bail, ensure};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
     time::UNIX_EPOCH,
 };
 
@@ -128,6 +129,11 @@ pub fn is_demo(path: &Path) -> bool {
 }
 
 pub fn validate_demo(path: &Path) -> Result<()> {
+    validate_demo_cancellable(path, &AtomicBool::new(false))
+}
+
+pub fn validate_demo_cancellable(path: &Path, cancel: &AtomicBool) -> Result<()> {
+    ensure!(!cancel.load(Ordering::Relaxed), "Operation cancelled");
     let mut file = File::open(path).with_context(|| format!("Open {}", path.display()))?;
     let size = file.metadata()?.len();
     ensure!(size > 16, "Truncated demo header");
@@ -142,11 +148,11 @@ pub fn validate_demo(path: &Path) -> Result<()> {
         offset == 0 || (offset >= 16 && offset < size),
         "Demo is unfinished or has a corrupt file-info offset. Wait until recording/downloading finishes"
     );
-    validate_outer_frames(&mut file, size)?;
+    validate_outer_frames(&mut file, size, cancel)?;
     Ok(())
 }
 
-fn validate_outer_frames(file: &mut File, size: u64) -> Result<()> {
+fn validate_outer_frames(file: &mut File, size: u64, cancel: &AtomicBool) -> Result<()> {
     use std::io::BufReader;
     fn varint(reader: &mut impl Read) -> Result<u32> {
         let mut value = 0_u32;
@@ -167,6 +173,7 @@ fn validate_outer_frames(file: &mut File, size: u64) -> Result<()> {
     reader.seek(SeekFrom::Start(16))?;
     let mut position = 16;
     while position < size {
+        ensure!(!cancel.load(Ordering::Relaxed), "Operation cancelled");
         let command = varint(&mut reader)?;
         let tick = varint(&mut reader)?;
         let length = varint(&mut reader)? as u64;
@@ -387,8 +394,12 @@ pub fn atomic_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
     let parent = path.parent().context("Missing data directory")?;
     fs::create_dir_all(parent)?;
     let mut temp = tempfile::NamedTempFile::new_in(parent)?;
-    serde_json::to_writer_pretty(&mut temp, value)?;
-    temp.write_all(b"\n")?;
+    {
+        let mut writer = BufWriter::new(&mut temp);
+        serde_json::to_writer_pretty(&mut writer, value)?;
+        writer.write_all(b"\n")?;
+        writer.flush()?;
+    }
     temp.as_file().sync_all()?;
     temp.persist(path).map_err(|e| e.error)?;
     Ok(())

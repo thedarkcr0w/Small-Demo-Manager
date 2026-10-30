@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Destination)
+param([Parameter(Mandatory=$true)][string]$Destination, [switch]$Bundled)
 $ErrorActionPreference = 'Stop'
 $hostLine = rustc -vV | Select-String '^host: '
 if (-not $hostLine) { throw 'Cannot determine the Rust build target' }
@@ -21,7 +21,8 @@ New-Item -ItemType Directory -Path $Destination -Force | Out-Null
 $index = New-Object 'System.Collections.Generic.List[string]'
 $index.Add("# Locked dependency licenses - $buildTarget")
 $index.Add('')
-$index.Add('These components retain their own licenses, not the darkcr0w personal-use terms. This list follows the locked dependency graph for the Windows build target, including its build-time dependencies. Unmodified source is available from the exact crates.io versions linked below; `cargo fetch --locked` also retrieves it. Symphonia source is provided under MPL-2.0 at those links. The modified parser source is in the project repository. Supplemental upstream license sources and revisions are recorded alongside their texts; compiler/runtime notices are in ../toolchain/.')
+$index.Add('These components retain their own licenses, not the darkcr0w personal-use terms. This list follows the locked dependency graph for the Windows build target, including its build-time dependencies. Unmodified source is available from the exact crates.io versions linked below; `cargo fetch --locked` also retrieves it. Symphonia source is provided under MPL-2.0 at those links. The modified parser source is in the project repository.')
+$index.Add($(if ($Bundled) { 'Full dependency, font, compiler/runtime notices and supplemental provenance are consolidated in ../../THIRD-PARTY-NOTICES.md. This index is retained at its original path for compatibility with the 2.0.0 updater.' } else { 'Supplemental upstream license sources and revisions are recorded alongside their texts; compiler/runtime notices are in ../toolchain/.' }))
 $index.Add('')
 $index.Add('| Component | Declared license | Source | Included notices |')
 $index.Add('|---|---|---|---|')
@@ -55,7 +56,9 @@ foreach ($package in ($metadata.packages | Where-Object { $ids.Contains($_.id) -
     $source = if ($package.name -eq 'source2-demo') { 'https://github.com/thedarkcr0w/Small-Demo-Manager/tree/main/vendor/source2-demo' } else { 'https://crates.io/crates/' + $package.name + '/' + $package.version }
     $license = if ($package.license) { $package.license } else { 'See upstream license file' }
     $count = $notices.Count + @($extra | Where-Object { $_.Name -match '^(LICEN[CS]E|COPYING|COPYRIGHT|NOTICE|OFL|UFL|MIT|Apache|CC0)' }).Count
-    $included = if ($count) { "[$count files]($id/)" } else { 'MISSING — package build must fail' }
+    $included = if ($count) {
+        if ($Bundled) { "[$count notices](../../THIRD-PARTY-NOTICES.md)" } else { "[$count files]($id/)" }
+    } else { 'MISSING — package build must fail' }
     if (-not $count) { $missing.Add($id) }
     $index.Add("| $id | $license | [source]($source) | $included |")
 }

@@ -1,5 +1,9 @@
 # Native migration / feature audit
 
+This records the 2.0.0 migration. The 2.0.1 follow-up stops legacy data import,
+requires explicit background-parsing opt-in, and consolidates ZIP license notices.
+See [STARTUP-HANG.md](STARTUP-HANG.md) for the reproduced hang and regression tests.
+
 The root Cargo project is the application. The unused C# / React sources,
 WebView2 bridge, duplicate .NET shipping directories and ZIP, obsolete UI images,
 and duplicate icons have been removed from the working tree. Earlier versions

@@ -249,7 +249,7 @@ pub fn list_clips(base: &Path) -> Result<Vec<Clip>> {
         if !manifest.is_file() {
             continue;
         }
-        let entries: Vec<Clip> = serde_json::from_reader(File::open(&manifest)?)
+        let entries: Vec<Clip> = serde_json::from_reader(BufReader::new(File::open(&manifest)?))
             .with_context(|| format!("Read voice manifest {}", manifest.display()))?;
         clips.extend(entries.into_iter().filter(|c| c.path.is_file()));
     }

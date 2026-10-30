@@ -18,6 +18,7 @@ pub struct Settings {
     pub move_files: bool,
     pub backup_before_move: bool,
     pub background_parse: bool,
+    pub background_parse_opt_in: bool,
     pub check_for_updates: bool,
     pub layout: Layout,
 }
@@ -28,7 +29,8 @@ impl Default for Settings {
             cs2_path: PathBuf::new(),
             move_files: false,
             backup_before_move: true,
-            background_parse: true,
+            background_parse: false,
+            background_parse_opt_in: false,
             check_for_updates: true,
             layout: Layout::Hybrid,
         }

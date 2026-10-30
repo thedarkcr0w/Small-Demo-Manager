@@ -83,7 +83,7 @@ fn main() -> Result<()> {
         "Small Demo Manager",
         options,
         Box::new(move |cc| {
-            let app = ui::App::new(cc, startup);
+            let app = ui::App::new(cc, startup, restart.is_some());
             if let Some((plan, _)) = &restart {
                 if !app.library_is_open() {
                     return Err("Updated app could not open the saved library".into());

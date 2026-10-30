@@ -37,17 +37,19 @@ dependencies resolved in `Cargo.lock`):
 * tempfile — MIT OR Apache-2.0
 * zip — MIT
 * trash — MIT
-* Rust standard library and compiler-builtins — see `LICENSES/toolchain/rust/`
+* Rust standard library and compiler-builtins — compiler/runtime notices below in the release bundle
 * GCC runtime — GPL-3.0 with the GCC Runtime Library Exception
 * MinGW-w64 runtime and winpthreads — their bundled notices apply
 
 This is an attribution index, not a replacement for upstream license texts.
-`scripts/package.ps1` includes full license/notice files from the locked Windows
-dependency graph in `LICENSES/dependencies`, with an SPDX/provenance index.
+`scripts/package.ps1` appends full license/notice texts from the locked Windows
+dependency graph to this file in the release ZIP. Its component/source index is
+`LICENSES/dependencies/INDEX.md`.
 Workspace license texts omitted by published crates are supplied from
-`LICENSES/upstream/`, with their upstream URLs, revisions, and file hashes. The
-package also contains the font licenses, original project notice, and compiler /
-runtime notices in `LICENSES/toolchain/`. Packaging fails on missing dependency
+the repository's `LICENSES/upstream/`, with their upstream URLs, revisions, and
+file hashes. Font licenses and compiler/runtime notices are consolidated here
+in the release bundle as well. The original MIT notice is also retained at its
+existing path for compatibility with the 2.0.0 updater. Packaging fails on missing dependency
 notices instead of producing a warning-only bundle.
 Unmodified sources are available from each exact crates.io version linked in
 that index and via `cargo fetch --locked`; the modified parser is in `vendor/`.

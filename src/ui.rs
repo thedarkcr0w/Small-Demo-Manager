@@ -60,6 +60,7 @@ struct Active {
     label: String,
     progress: Option<f32>,
     cancel: Option<Arc<AtomicBool>>,
+    parsing: bool,
 }
 
 pub struct App {
@@ -96,7 +97,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, startup: Option<PathBuf>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        startup: Option<PathBuf>,
+        restoring_update: bool,
+    ) -> Self {
         theme::install(&cc.egui_ctx);
         let ctx = cc.egui_ctx.clone();
         let worker = Worker::start(move || ctx.request_repaint());
@@ -117,6 +122,14 @@ impl App {
             .as_ref()
             .map(|s| s.library.settings.clone())
             .unwrap_or_default();
+        let startup = if restoring_update {
+            startup.and_then(|path| match &store {
+                Some(store) => store.restore_update_demo(path),
+                None => Some(path),
+            })
+        } else {
+            startup
+        };
         let (watch_sender, watch_events) = mpsc::channel();
         let auto_updates = settings.check_for_updates;
         let mut app = Self {
@@ -199,15 +212,33 @@ impl App {
             self.info("Wait for the current operation or cancel parsing first");
             return;
         }
+        let parsing = matches!(&job, Job::Parse { output: None, .. });
         if let Err(e) = self.worker.sender.send(job) {
             self.error(e);
             return;
         }
         self.active = Some(Active {
             label: label.into(),
-            progress: cancel.as_ref().map(|_| 0.0),
+            progress: None,
             cancel,
+            parsing,
         });
+    }
+
+    fn cancel_active(&mut self) {
+        let Some(active) = &self.active else { return };
+        if let Some(cancel) = &active.cancel {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        if active.parsing {
+            // Cancel the queue as well as this file, rather than immediately
+            // starting another one of thousands of pending background parses.
+            if let Some(store) = &mut self.store {
+                store.library.settings.background_parse = false;
+            }
+            self.settings_draft.background_parse = false;
+            self.mark_dirty();
+        }
     }
 
     fn refresh_watcher(&mut self) {

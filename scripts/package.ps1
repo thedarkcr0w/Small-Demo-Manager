@@ -1,7 +1,8 @@
-param([switch]$SkipTests)
+param([switch]$SkipTests, [string]$OutputDirectory = 'dist')
 $ErrorActionPreference = 'Stop'
 Push-Location (Join-Path $PSScriptRoot '..')
 $stage = $null
+$licenseStage = $null
 try {
     cargo fmt --all -- --check
     if ($LASTEXITCODE -ne 0) { throw 'Formatting check failed' }
@@ -11,7 +12,7 @@ try {
     }
     cargo build --release --locked --bin SmallDemoManager
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-    $out = Join-Path (Get-Location) 'dist'
+    $out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
     $stage = Join-Path $out ('native-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'target' }
@@ -28,10 +29,12 @@ try {
         executable_sha256 = (Get-FileHash -LiteralPath (Join-Path $stage 'SmallDemoManager.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     [IO.File]::WriteAllText((Join-Path $stage 'update-manifest.json'), ($manifest | ConvertTo-Json))
-    Copy-Item 'README.md','PATCHNOTES.md','showcase.png','LICENSE','THIRD-PARTY-NOTICES.md' $stage
-    Copy-Item 'LICENSES' (Join-Path $stage 'LICENSES') -Recurse
-    Copy-Item 'docs' (Join-Path $stage 'docs') -Recurse
-    & (Join-Path $PSScriptRoot 'licenses.ps1') -Destination (Join-Path $stage 'LICENSES/dependencies')
+    $licenseStage = Join-Path $out ('licenses-' + [Guid]::NewGuid().ToString('N'))
+    & (Join-Path $PSScriptRoot 'licenses.ps1') -Destination $licenseStage -Bundled
+    & (Join-Path $PSScriptRoot 'bundle-licenses.ps1') -DependenciesDirectory $licenseStage -Destination $stage
+    $expected = @('SmallDemoManager.exe','update-manifest.json','LICENSE','THIRD-PARTY-NOTICES.md','LICENSES/Small-Demo-Manager-original-MIT.txt','LICENSES/dependencies/INDEX.md')
+    $actual = @(Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { $_.FullName.Substring($stage.Length + 1).Replace('\','/') })
+    if (@(Compare-Object ($expected | Sort-Object) ($actual | Sort-Object)).Count) { throw 'Release ZIP must contain only the app, updater manifest and required license notices' }
     # Registry archives can use pre-1980 timestamps, which ZIP cannot encode.
     # Normalize only our staged copies; upstream source files stay untouched.
     foreach ($item in (Get-ChildItem -LiteralPath $stage -Recurse -Force)) {
@@ -47,8 +50,10 @@ try {
     Write-Output "SHA256 $hash"
 } finally {
     # Only this invocation's uniquely named staging directory is removed.
-    if ($stage -and (Test-Path -LiteralPath $stage)) {
-        Remove-Item -LiteralPath $stage -Recurse -Force
+    foreach ($ownedStage in @($stage,$licenseStage)) {
+        if ($ownedStage -and (Test-Path -LiteralPath $ownedStage)) {
+            Remove-Item -LiteralPath $ownedStage -Recurse -Force
+        }
     }
     Pop-Location
 }

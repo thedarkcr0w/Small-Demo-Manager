@@ -89,10 +89,8 @@ impl App {
                         if let Some(p) = active.progress {
                             ui.add(ProgressBar::new(p).desired_width(120.0).show_percentage());
                         }
-                        if let Some(cancel) = &active.cancel
-                            && ui.small_button("Cancel").clicked()
-                        {
-                            cancel.store(true, Ordering::Relaxed);
+                        if active.cancel.is_some() && ui.small_button("Cancel").clicked() {
+                            self.cancel_active();
                         }
                     } else {
                         small(
@@ -124,35 +122,26 @@ impl App {
             .resizable(false)
             .frame(Frame::new().fill(SURFACE).inner_margin(10))
             .show(ui, |ui| {
-                let demos = self
-                    .store
-                    .as_ref()
-                    .map(|s| {
-                        s.library
-                            .demos
-                            .values()
-                            .filter(|d| d.available)
-                            .cloned()
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
                 let cutoff = chrono::Utc::now().timestamp().saturating_sub(7 * 86400) as u128
                     * 1_000_000_000;
+                let mut total = 0;
+                let mut recent = 0;
+                let mut favorites = 0;
+                let mut folder_counts = HashMap::new();
+                let mut tags = BTreeSet::new();
+                if let Some(store) = &self.store {
+                    for demo in store.library.demos.values().filter(|d| d.available) {
+                        total += 1;
+                        recent += usize::from(demo.stamp.modified_ns >= cutoff);
+                        favorites += usize::from(demo.favorite);
+                        *folder_counts.entry(demo.folder_id.clone()).or_insert(0) += 1;
+                        tags.extend(demo.tags.iter().cloned());
+                    }
+                }
                 for (view, title, count) in [
-                    (View::All, "≡   All demos", demos.len()),
-                    (
-                        View::Recent,
-                        "◷   Recent",
-                        demos
-                            .iter()
-                            .filter(|d| d.stamp.modified_ns >= cutoff)
-                            .count(),
-                    ),
-                    (
-                        View::Favorites,
-                        "☆   Favorites",
-                        demos.iter().filter(|d| d.favorite).count(),
-                    ),
+                    (View::All, "≡   All demos", total),
+                    (View::Recent, "◷   Recent", recent),
+                    (View::Favorites, "☆   Favorites", favorites),
                 ] {
                     let selected = self.view == view;
                     let label = format!("{title}                 {count}");
@@ -194,7 +183,7 @@ impl App {
                     .show(ui, |ui| {
                         for folder in &folders {
                             let selected = self.view == View::Folder(folder.id.clone());
-                            let count = demos.iter().filter(|d| d.folder_id == folder.id).count();
+                            let count = folder_counts.get(&folder.id).copied().unwrap_or(0);
                             let response = Frame::new()
                                 .fill(if selected { SOFT } else { Color32::TRANSPARENT })
                                 .corner_radius(6)
@@ -248,7 +237,6 @@ impl App {
                     });
                 ui.add_space(12.0);
                 eyebrow(ui, "Filter by tag");
-                let tags: BTreeSet<_> = demos.iter().flat_map(|d| d.tags.iter().cloned()).collect();
                 ui.horizontal_wrapped(|ui| {
                     for tag in &tags {
                         if ui
@@ -443,13 +431,34 @@ impl App {
                 );
             });
         });
-        ScrollArea::vertical()
+        let scroll = ScrollArea::vertical()
             .id_salt("demo_library")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if cards {
-                    ui.horizontal_wrapped(|ui| {
-                        for id in &ids {
+            .auto_shrink([false, false]);
+        if ids.is_empty() {
+            scroll.show(ui, |ui| {
+                ui.add_space(30.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(RichText::new("No demos to show").color(SECONDARY));
+                    small(ui, "Add a folder, import a demo, or clear your filters.");
+                    if ui.button("Clear filters").clicked() {
+                        self.query.clear();
+                        self.map_filter.clear();
+                        self.tag_filter.clear();
+                        self.view = View::All;
+                    }
+                });
+            });
+        } else if cards {
+            // Cards are 210 points wide plus 12 points of padding on each side.
+            // Reserve scrollbar space before choosing the number of columns.
+            let columns = ((ui.available_width() - 20.0 + ui.spacing().item_spacing.x)
+                / (234.0 + ui.spacing().item_spacing.x))
+                .floor()
+                .max(1.0) as usize;
+            scroll.show_rows(ui, 129.0, ids.len().div_ceil(columns), |ui, rows| {
+                for row in rows {
+                    ui.horizontal_top(|ui| {
+                        for id in ids.iter().skip(row * columns).take(columns) {
                             if let Some(demo) = self
                                 .store
                                 .as_ref()
@@ -460,32 +469,27 @@ impl App {
                             }
                         }
                     });
-                } else {
-                    for id in &ids {
-                        if let Some(demo) = self
-                            .store
-                            .as_ref()
-                            .and_then(|s| s.library.demos.get(id))
-                            .cloned()
-                        {
-                            self.demo_row(ui, &demo);
-                        }
-                    }
-                }
-                if ids.is_empty() {
-                    ui.add_space(30.0);
-                    ui.vertical_centered(|ui| {
-                        ui.label(RichText::new("No demos to show").color(SECONDARY));
-                        small(ui, "Add a folder, import a demo, or clear your filters.");
-                        if ui.button("Clear filters").clicked() {
-                            self.query.clear();
-                            self.map_filter.clear();
-                            self.tag_filter.clear();
-                            self.view = View::All;
-                        }
-                    });
                 }
             });
+        } else {
+            let height = if ui.available_width() > 550.0 {
+                58.0
+            } else {
+                76.0
+            };
+            scroll.show_rows(ui, height, ids.len(), |ui, rows| {
+                for id in &ids[rows] {
+                    if let Some(demo) = self
+                        .store
+                        .as_ref()
+                        .and_then(|s| s.library.demos.get(id))
+                        .cloned()
+                    {
+                        self.demo_row(ui, &demo);
+                    }
+                }
+            });
+        }
     }
 
     fn demo_row(&mut self, ui: &mut Ui, demo: &Demo) {
@@ -652,15 +656,18 @@ impl App {
                 ui.vertical(|ui| {
                     ui.set_width(210.0);
                     ui.set_min_height(105.0);
-                    ui.label(
-                        RichText::new(
-                            demo.parsed
-                                .as_ref()
-                                .map(|g| map_name(&g.map))
-                                .unwrap_or_else(|| "Unparsed demo".into()),
+                    ui.add(
+                        Label::new(
+                            RichText::new(
+                                demo.parsed
+                                    .as_ref()
+                                    .map(|g| map_name(&g.map))
+                                    .unwrap_or_else(|| "Unparsed demo".into()),
+                            )
+                            .size(18.0)
+                            .strong(),
                         )
-                        .size(18.0)
-                        .strong(),
+                        .truncate(),
                     );
                     ui.add(Label::new(RichText::new(demo.filename()).monospace()).truncate());
                     if let Some(game) = &demo.parsed {
@@ -1508,6 +1515,7 @@ impl App {
                     ui.add_enabled_ui(self.settings_draft.move_files, |ui| { ui.checkbox(&mut self.settings_draft.backup_before_move, "Keep a verified backup before moving"); });
                     small(ui, "Backups: %LocalAppData%/Small-Demo-Manager/Backups.native");
                     ui.checkbox(&mut self.settings_draft.background_parse, "Parse the library in the background for player / SteamID search");
+                    small(ui, "Off by default. Enabling this reads every watched demo, one at a time. Cancel also stops the background queue.");
                     ui.separator();
                     self.update_settings(ui);
                     ui.separator();
@@ -1517,6 +1525,7 @@ impl App {
                             let path = PathBuf::from(self.cs2_input.trim());
                             if !path.as_os_str().is_empty() && let Err(e) = steam::validate_destination(&path) { self.error(e); return; }
                             self.settings_draft.cs2_path = path;
+                            self.settings_draft.background_parse_opt_in = true;
                             if let Some(store) = &mut self.store { store.library.settings = self.settings_draft.clone(); }
                             self.persist(); done = true;
                         }

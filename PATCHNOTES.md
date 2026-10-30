@@ -1,5 +1,21 @@
 # Patch Notes
 
+## 31.10.2026 — 2.0.1
+
+### [ GENERAL ]
+- Fixed long startup stalls when loading and rescanning large demo libraries.
+- Reduced time spent reading and saving library data and voice manifests.
+- Library layouts now draw only the visible rows and cards.
+
+### [ LIBRARY ]
+- Stopped importing the old app's library and settings. Old data files are left untouched.
+- Folders previously imported from the old library are no longer watched. Add the folders you want to use again.
+- Background parsing is now off until enabled in Settings. Cancel also stops the background queue.
+- Added cancellation during demo validation and sign-on. These stages no longer show a misleading 0%.
+
+### [ MISC ]
+- Removed documentation, readmes and screenshots from the Windows ZIP. Required license notices are bundled together.
+
 ## 30.10.2026 — 2.0.0
 
 ### [ GENERAL ]

@@ -21,8 +21,8 @@ cargo clippy --locked --all-targets -- -D warnings
 ./scripts/package.ps1
 ```
 
-The package script builds `SmallDemoManager.exe`, bundles the README, patch notes,
-screenshot, docs, licenses, and available dependency notices, then writes:
+The package script builds `SmallDemoManager.exe`, bundles the updater manifest and
+required license notices, then writes:
 
 * `dist/SmallDemoManager-native-windows-x64.zip`
 * `dist/SmallDemoManager-native-windows-x64.zip.sha256`
@@ -33,6 +33,15 @@ notices omitted by crates are supplied from the reviewed files in `LICENSES/upst
 The ZIP includes `update-manifest.json` with the version, platform, and executable
 hash. Publishing a compatible update also requires its SHA-256 sidecar and a
 matching stable SemVer tag; see [UPDATING.md](UPDATING.md).
+
+Use `./scripts/package.ps1 -OutputDirectory dist/startup-fix` to keep a local test
+package separate from an existing release ZIP. This does not publish an update.
+
+The release ZIP contains only six files: the executable, updater manifest,
+`LICENSE`, consolidated `THIRD-PARTY-NOTICES.md`, original MIT notice, and dependency
+license index. The last three keep the package compatible with the 2.0.0 updater.
+No README, patch notes, screenshot, developer docs, or per-dependency folders ship
+in the ZIP. Their source files remain in the repository.
 
 ### GNU toolchain example
 
@@ -80,6 +89,27 @@ cargo test --locked --test protocol_fixtures -- --ignored
 
 Passing these fixtures does not certify an untested new CS2 patch. See
 [NATIVE-AUDIT.md](NATIVE-AUDIT.md) for the evidence and remaining release checks.
+
+## Startup regression benchmark
+
+```powershell
+cargo test --locked --test startup_performance -- --ignored --nocapture
+```
+
+This measures loading, scanning, reconciliation, and saving an isolated synthetic
+1,000-demo library. It checks that caches and annotations survive; the empty test
+files are not parsed as real matches. Timings are printed rather than used as a
+flaky CI deadline. `SDM_KEEP_STARTUP_FIXTURE=1` retains the temporary fixture for
+interactive window-responsiveness tests. Normal app data is never used.
+
+On an interactive Windows desktop, use the printed fixture directory with:
+
+```powershell
+./scripts/test-startup.ps1 -Executable 'target/gnu/release/SmallDemoManager.exe' -FixtureDirectory 'C:\path\printed\by\benchmark'
+```
+
+This sends window-message heartbeats, saves a timing report, and closes only its
+own test process. Use `-AllowBlocked` when measuring a known-bad baseline.
 
 ## Source layout
 
