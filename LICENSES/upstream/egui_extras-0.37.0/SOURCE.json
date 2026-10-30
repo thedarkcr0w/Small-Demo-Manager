@@ -1,0 +1,17 @@
+{
+    "repository":  "emilk/egui",
+    "revision":  "9d317be94fc96df23bd5d9316f357efa2d3631d8",
+    "note":  null,
+    "files":  [
+                  {
+                      "file":  "LICENSE-MIT",
+                      "url":  "https://raw.githubusercontent.com/emilk/egui/9d317be94fc96df23bd5d9316f357efa2d3631d8/LICENSE-MIT",
+                      "sha256":  "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c"
+                  },
+                  {
+                      "file":  "LICENSE-APACHE",
+                      "url":  "https://raw.githubusercontent.com/emilk/egui/9d317be94fc96df23bd5d9316f357efa2d3631d8/LICENSE-APACHE",
+                      "sha256":  "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90"
+                  }
+              ]
+}

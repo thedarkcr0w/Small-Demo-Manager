@@ -1,0 +1,46 @@
+name: Native Rust
+
+on:
+  push:
+    paths: ['src/**', 'tests/**', 'vendor/**', 'assets/**', 'Cargo.*', 'build.rs', 'scripts/**', 'docs/**', 'README.md', 'PATCHNOTES.md', 'showcase.png', 'LICENSE*', 'LICENSES/**', 'THIRD-PARTY-NOTICES.md', '.github/workflows/native.yml']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - name: Download pinned public protocol fixtures
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'sdm-protocol-fixtures'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          foreach ($name in @('14011.dem', '14150_ag2.dem', '14160.dem')) {
+            Invoke-WebRequest "https://raw.githubusercontent.com/saul/demofile-net/b476cff578f195716af565da5315a59ae9c2629b/demos/$name" -OutFile (Join-Path $dir $name)
+          }
+          "SDM_DEMO_FIXTURES=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - run: cargo test --locked --test protocol_fixtures -- --ignored
+      - run: ./scripts/package.ps1 -SkipTests
+        shell: pwsh
+      - name: Validate the updater package
+        shell: pwsh
+        run: |
+          $env:SDM_UPDATE_PACKAGE = (Resolve-Path 'dist/SmallDemoManager-native-windows-x64.zip').Path
+          cargo test --locked --lib packaged_release_passes_the_actual_updater_validation -- --ignored
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmallDemoManager-native-windows-x64
+          path: |
+            dist/SmallDemoManager-native-windows-x64.zip
+            dist/SmallDemoManager-native-windows-x64.zip.sha256

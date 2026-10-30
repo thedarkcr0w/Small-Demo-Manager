@@ -1,0 +1,17 @@
+{
+    "repository":  "emilk/egui",
+    "revision":  "841a328ba2dd8f6996beb7189ebb7fc00e668a2a",
+    "note":  "License texts from the published 0.37.0 tag; the 7c0b4040 crate VCS commit is not available in the public repository.",
+    "files":  [
+                  {
+                      "file":  "LICENSE-MIT",
+                      "url":  "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-MIT",
+                      "sha256":  "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c"
+                  },
+                  {
+                      "file":  "LICENSE-APACHE",
+                      "url":  "https://raw.githubusercontent.com/emilk/egui/841a328ba2dd8f6996beb7189ebb7fc00e668a2a/LICENSE-APACHE",
+                      "sha256":  "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90"
+                  }
+              ]
+}

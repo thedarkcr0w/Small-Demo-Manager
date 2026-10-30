@@ -2,54 +2,122 @@
 
 # 🎧 Small Demo Manager
 
-**A modern, all-in-one demo manager for Counter-Strike 2.**
-Browse your library, jump to matches, extract per-player voice chat, and copy in-game spectator commands — in one place.
+**A native, all-in-one demo manager for Counter-Strike 2.**
+Browse your library, inspect matches, extract per-player voice chat, and copy
+in-game spectator commands — with the familiar dark/amber design, rebuilt in Rust.
 
 [![Latest release](https://img.shields.io/github/v/release/thedarkcr0w/Small-Demo-Manager?label=release&color=f59e0b)](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/thedarkcr0w/Small-Demo-Manager/total?color=22c55e)](https://github.com/thedarkcr0w/Small-Demo-Manager/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows)](#-runtime-requirements)
-[![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/download/dotnet/9.0)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-native-f59e0b?logo=rust)](Cargo.toml)
+[![License](https://img.shields.io/badge/license-personal%20use-blue)](LICENSE)
 
-<img width="1280" alt="Small Demo Manager — match overview" src="showcase.png" />
+<img width="1280" alt="Small Demo Manager — native Rust match overview" src="showcase.png" />
+
+*Native Rust match view. Local file paths are hidden in this screenshot.*
 
 </div>
 
 ---
 
+> [!NOTE]
+> **2.0.0 is the Rust rewrite.** If you're coming from 1.x, download the Windows
+> ZIP below. The old app's data files are left intact. See the
+> [patch notes](PATCHNOTES.md) for the changes and known issues.
+
 ## ✨ Features
 
 | | |
 |---|---|
-| 📁 **Watched folder library** | Point the app at your CS2 / FACEIT / ESEA folders, get a searchable table of every demo with map, score, players, tags, and notes — all persistent. |
-| 🎯 **Auto-detect CS2 install** | One-click detection of your CS2 replays folder via the Steam registry + `libraryfolders.vdf`. |
-| 🎙️ **Per-player voice extractor** | Pulls out each player's voice chat as `.wav` clips using the Opus decoder — saved under `%LocalAppData%\Small-Demo-Manager\Audio\`. |
-| 📣 **Spectator voice command** | Build the `tv_listen_voice_indices` bitfield with a single click and copy it to your clipboard. |
-| 🗂️ **Tags, notes & favorites** | Per-demo metadata that survives app updates and folder moves. |
-| 🪟 **Move to CS2** | Move any demo into your CS2 replays folder with a hash-verified copy so you can use `playdemo <name>` in-game. |
-| 🖱️ **Drag-and-drop import** | Drop a `.dem` from Explorer **or straight out of a 7-Zip / WinRAR archive** — the app extracts and imports automatically. |
-| 🔄 **Built-in auto-updater** | New releases are detected and installed from GitHub via **Settings → App update**. |
+| 📁 **Watched folder library** | Recursively watches your demo folders, refreshes changed files, and offers table, card, and hybrid layouts. |
+| 🔎 **Library search** | Find demos by filename, parsed player or SteamID, map, server, team, tag, or note. Optional background parsing makes player search work across the library. |
+| 🏆 **Match details** | Recorded scoreboards, K/D/A, damage, ADR, and observed round results. Missing data stays unavailable — no invented IDs, ratings, or stats. |
+| 🎙️ **Per-player voice extractor** | Extract one player or everyone to WAV, with measured waveforms and native audio playback. Previous extractions are kept. |
+| 📣 **Spectator voice commands** | Select players and copy the correct low/high `tv_listen_voice_indices` masks. Profile links use recorded SteamIDs. |
+| 🗂️ **Tags, notes & favorites** | Save annotations locally; in-app renames and transfers preserve them. Reads supported annotations from the old app without overwriting its files. |
+| 🪟 **Copy or move to CS2** | Copy by default, or move with an optional backup. SHA-256 verification happens before removing the source; existing files are never overwritten. |
+| 🎯 **Auto-detect CS2 install** | Finds Steam libraries and checks for a real CS2 game directory. |
+| 🖱️ **Drag-and-drop import** | Import `.dem` files and ZIP archives, keeping the originals. Extract RAR/7z archives first. |
+| 🔄 **GitHub auto-updater** | Checks for releases at startup, downloads updates in the background, verifies SHA-256, and installs after you confirm a restart. Keeps a rollback backup; old .NET builds are excluded. |
+
+Only voice actually recorded in a demo can be extracted. WAV is the supported
+export format; MP3/FLAC and match-lobby discovery are not offered.
 
 ---
 
 ## ⚙️ Runtime Requirements
 
-Windows 10 or 11 with the **[.NET 9.0 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/9.0)** installed.
+**Windows 10 or 11, x64**, with an OpenGL 3.3-capable graphics driver. An audio
+output device is needed for playback.
 
-WebView2 (the embedded browser the UI runs in) ships with Windows 11 by default. On Windows 10, install the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) if it isn't already.
+**No .NET, WebView2, Node.js, browser, or FFmpeg is required.** The Opus decoder is
+built into the app. Windows x64 is the distribution target; other platforms are
+not release-tested.
 
 > [!IMPORTANT]
-> Valve occasionally changes the demo file format with CS2 updates. When that happens the demo parser needs a new version of [`DemoFile`](https://www.nuget.org/packages/DemoFile.Game.Cs) — these updates ship through GitHub releases (and the in-app updater), not the Microsoft Store.
+> Valve occasionally changes the CS2 demo format. This release includes fixes for
+> string tables, game modes, voice packets, and recordings without final metadata.
+> Exact newest-patch compatibility still needs a fresh demo recorded on that patch;
+> a recent download date alone does not establish compatibility.
 
 ---
 
 ## 📥 Installation
 
-1. Download the latest **`SmallDemoManager-shipping.zip`** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
-2. Extract the archive anywhere **except** `Program Files` (so the built-in updater can replace files without UAC prompts).
-3. Run `SmallDemoManager.exe`.
+1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.0.0/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
+2. Extract the ZIP to a folder and run **`SmallDemoManager.exe`**.
+3. Add your demo folder, then open **Settings** to configure the CS2 destination.
 
-That's it — no installer, no admin rights, no registry entries. Settings live under `%LocalAppData%\Small-Demo-Manager\`.
+No installer or administrator rights are required. Settings and saved audio live
+under `%LocalAppData%\Small-Demo-Manager\`:
+
+* `Library.native.json` — settings, watched folders, annotations, and parse caches.
+* `Audio.native/` — extracted WAV clips, separated by demo and extraction run.
+* `Backups.native/` — optional verified backups before moving demos.
+
+Existing `Library.json`, `Config.json`, and legacy `Audio/` are not modified.
+Old WAVs remain on disk but are not automatically added to the native clip browser.
+
+### App updates
+
+Open **Settings → App updates** to check manually or turn automatic startup checks
+on/off. When an update is available, choose **Download update**, then
+**Restart & install**. The app saves your library, verifies the package, backs up
+the previous app files, and restarts. Installation or startup failure restores the
+previous files; your demos, annotations, and saved audio are not replaced.
+
+Keep the app in a folder you can write to. Updates become available after a
+compatible ZIP and checksum are published on GitHub; older .NET releases are not
+compatible. See [the updater guide](docs/UPDATING.md) for release requirements,
+verification, and backup locations.
+
+The Windows executable is unsigned. If Windows shows a publisher warning, check
+that the download came from this repository and verify the supplied `.sha256`.
+
+### Build from source
+
+Install **Rust 1.95+**, CMake, and Visual Studio Build Tools with **Desktop
+development with C++** and the Windows SDK, then run:
+
+```powershell
+cargo run --locked
+./scripts/package.ps1
+```
+
+Packaging writes the native ZIP and a `.sha256` sidecar to `dist/`; it does not
+publish anything. See [BUILDING.md](docs/BUILDING.md) for tests, GNU toolchain setup,
+CLI diagnostics, and the source layout.
+
+---
+
+## 📝 Patch Notes
+
+**30.10.2026 — 2.0.0**
+
+* Rebuilt the app in Rust while keeping the dark/amber design.
+* Fixed demo decoding, voice-clip grouping, folder watching, and safe file transfers.
+* Removed fabricated data and unsupported controls.
+
+Read the [full patch notes and previous dated updates](PATCHNOTES.md).
 
 ---
 
@@ -82,32 +150,27 @@ Huge thanks to everyone who tests builds and reports issues:
 
 ## 📦 Built With
 
-**Demo parsing** — [DemoFile](https://www.nuget.org/packages/DemoFile/) · [DemoFile.Game.Cs](https://www.nuget.org/packages/DemoFile.Game.Cs)
-**Audio** — [Concentus](https://www.nuget.org/packages/Concentus) (Opus decoder) · [NAudio](https://www.nuget.org/packages/NAudio)
-**UI** — [Microsoft.Web.WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) + React (precompiled with esbuild, vendored locally)
-**Shell** — [WindowsAPICodePackCore](https://www.nuget.org/packages/WindowsAPICodePackCore) · [WindowsAPICodePackShell](https://www.nuget.org/packages/WindowsAPICodePackShell)
+* **UI** — egui / eframe, directly rendered in a native OS window.
+* **Demo parsing** — [source2-demo](https://github.com/Rupas1k/source2-demo).
+* **Audio** — libopus / opus-rs, hound, rodio.
+* **Desktop integration** — notify, rfd, trash, winreg.
+See [third-party notices](THIRD-PARTY-NOTICES.md) and `Cargo.lock`.
 
 ---
 
-## 📅 Roadmap
+## 📅 Testing Still Needed
 
-- [x] Voice extractor
-- [x] Voice clip player
-- [x] Modernised UI
-- [x] Match-results view with per-player stats
-- [x] Custom rename function on move
-- [x] Watched-folder library
-- [x] Auto-detect CS2 install
-- [x] Built-in auto-updater
-- [x] Drag-and-drop import (incl. archive sources)
-- [ ] Background pre-parse for full-library player search
-- [ ] Find the match lobby using the demo
-- [ ] Video walkthrough
+* [ ] Validate fresh latest-patch matchmaking, FACEIT, POV, and overtime demos.
+* [ ] Test more Windows, DPI, graphics, and audio-device configurations.
+* [ ] Code signing for the Windows executable.
 
 ---
 
 <div align="center">
 
-Released under the [MIT License](LICENSE). Commercial use is prohibited.
+© 2026 **darkcr0w**. **All rights reserved; personal, non-commercial use permitted.**
+See [LICENSE](LICENSE). The original MIT-licensed project and third-party
+components retain their respective licenses and notices in [LICENSES](LICENSES)
+and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 </div>

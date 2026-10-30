@@ -1,0 +1,17 @@
+{
+    "repository":  "retep998/winapi-rs",
+    "revision":  "796a8e6c2971dc2ff1bcff166e6671284f9b5b6b",
+    "note":  "Project license from the upstream 0.3.9 tag, which depends on the GNU import-library crate 0.4.0.",
+    "files":  [
+                  {
+                      "file":  "LICENSE-MIT",
+                      "url":  "https://raw.githubusercontent.com/retep998/winapi-rs/796a8e6c2971dc2ff1bcff166e6671284f9b5b6b/LICENSE-MIT",
+                      "sha256":  "ce7bc3499fee93d5022ef430d5e4201e79a6d9154f3974e42f41349f0569e09b"
+                  },
+                  {
+                      "file":  "LICENSE-APACHE",
+                      "url":  "https://raw.githubusercontent.com/retep998/winapi-rs/796a8e6c2971dc2ff1bcff166e6671284f9b5b6b/LICENSE-APACHE",
+                      "sha256":  "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1"
+                  }
+              ]
+}

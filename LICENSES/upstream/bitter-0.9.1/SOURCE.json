@@ -1,0 +1,12 @@
+{
+    "repository":  "nickbabcock/bitter",
+    "revision":  "573e9afa3d734be0aa7cddb593becceab8138d92",
+    "note":  null,
+    "files":  [
+                  {
+                      "file":  "LICENSE.txt",
+                      "url":  "https://raw.githubusercontent.com/nickbabcock/bitter/573e9afa3d734be0aa7cddb593becceab8138d92/LICENSE.txt",
+                      "sha256":  "91276db973f25602d1aa43491f59cbc84cb88e6f151e1d0cc82a755563ce0195"
+                  }
+              ]
+}

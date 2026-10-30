@@ -1,21 +1,43 @@
-MIT License
+darkcr0w Personal Use License
 
-Copyright (c) 2025 Mustafa J.
+Copyright (c) 2026 darkcr0w. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Scope
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This license applies to the new native Rust application code and original
+contributions owned by darkcr0w (the "Software"). It does not replace the
+licenses of pre-existing code, artwork, dependencies, or other third-party
+materials. The original Small Demo Manager MIT license is preserved in
+LICENSES/Small-Demo-Manager-original-MIT.txt. Third-party materials remain
+governed by their respective licenses; see THIRD-PARTY-NOTICES.md.
+
+2. Personal use permission
+
+You may download, install, compile, and run the Software for your own personal,
+non-commercial use, free of charge. You may make private modifications solely
+for that personal, non-commercial use. You may keep reasonable personal backup
+copies. Copyright and license notices must remain intact.
+
+3. Rights reserved
+
+Except for the express permission above, no rights are granted. Without prior
+written permission from darkcr0w, you may not commercially use, sell, rent,
+license, sublicense, publish, redistribute, or provide the Software or modified
+versions to others, or use it to provide a commercial service. No trademark,
+branding, or endorsement rights are granted.
+
+These restrictions apply only to rights owned by darkcr0w. They do not restrict
+rights independently granted under the original MIT license, third-party
+licenses, or applicable law. Previously published MIT-licensed versions retain
+their original license and permissions.
+
+4. Disclaimer
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+IMPLIED, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, AND NONINFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, DARKCR0W
+AND THE CONTRIBUTORS SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+For permissions beyond personal, non-commercial use, contact darkcr0w through
+https://github.com/thedarkcr0w.
