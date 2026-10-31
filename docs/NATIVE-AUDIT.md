@@ -1,7 +1,7 @@
 # Native migration / feature audit
 
 This records the 2.0.0 migration. The 2.0.1 follow-up stops legacy data import,
-requires explicit background-parsing opt-in, and consolidates ZIP license notices.
+uses click/drop-only parsing, adds combined voice tracks, and consolidates ZIP license notices.
 See [STARTUP-HANG.md](STARTUP-HANG.md) for the reproduced hang and regression tests.
 
 The root Cargo project is the application. The unused C# / React sources,
@@ -109,6 +109,30 @@ demo or the user's library. Record validation results here before release.
   favorites, saved-audio bytes, and an unmanaged installation file. Paths containing
   spaces and `&` were included. The repeatable test is `scripts/test-updater.ps1`;
   this does not claim a published-release download/upgrade was performed.
+
+## 2.0.1 validation (2026-10-31)
+
+* 50 library unit tests and 10 UI-controller/rendering tests passed, including
+  click/drop-only parsing, queued imports, empty-library imports, and separate
+  everyone/player playback controls. All three pinned public protocol fixtures,
+  formatting, and strict Clippy passed again.
+* Exact PCM tests verify track ordering, overlapping-voice mixing, independent
+  player tracks, source-clip hashes, cancellation, and no-overwrite behavior.
+* The final packaged executable extracted the real `de_cache` recording into
+  **331 original clips, one everyone track, and 10 player tracks**. The everyone
+  track contains **381.04 seconds** with gaps removed. All 342 WAV headers and
+  durations matched their manifests; saved before/after source SHA-256 values
+  were identical.
+* The final ZIP contains exactly six application/manifest/license files and passes
+  the actual updater's package validation. The isolated Windows replacement test
+  passed again: parent-exit waiting, verified executable backup, replacement-startup
+  acknowledgement, and preservation of annotations, saved audio, and unmanaged files.
+* The packaged executable stayed responsive with the 1,000-demo startup fixture:
+  0 of 107 heartbeats blocked, maximum response 7.8 ms, title-bearing window after
+  218 ms on this host. These are diagnostic timings, not performance guarantees.
+* Physical desktop drag automation could not deliver a native OLE drop in this
+  environment. Drop-controller regressions passed; this is not a claim of a new
+  native end-to-end drag test or additional audio-device listening coverage.
 
 ### Remaining compatibility coverage
 

@@ -33,7 +33,19 @@ fn cli(args: &[std::ffi::OsString]) -> Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&parsed.game)?);
             if command == "extract" {
-                println!("Extracted {} WAV clips", parsed.clips.len());
+                println!(
+                    "Extracted {} WAV clips and {} playback tracks",
+                    parsed
+                        .clips
+                        .iter()
+                        .filter(|clip| clip.kind == small_demo_manager::model::ClipKind::Segment)
+                        .count(),
+                    parsed
+                        .clips
+                        .iter()
+                        .filter(|clip| clip.kind != small_demo_manager::model::ClipKind::Segment)
+                        .count()
+                );
             }
         }
         "--help" | "-h" => println!(

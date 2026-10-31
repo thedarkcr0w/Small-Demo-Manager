@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod tests;
 mod theme;
 mod updater;
 mod views;
@@ -61,6 +63,7 @@ struct Active {
     progress: Option<f32>,
     cancel: Option<Arc<AtomicBool>>,
     parsing: bool,
+    demo_id: Option<String>,
 }
 
 pub struct App {
@@ -75,6 +78,8 @@ pub struct App {
     tag_filter: BTreeSet<String>,
     selected: Option<String>,
     startup: Option<PathBuf>,
+    parse_requested: bool,
+    pending_imports: Vec<PathBuf>,
     selected_players: BTreeSet<String>,
     voice_open: bool,
     selected_speaker: Option<String>,
@@ -132,6 +137,7 @@ impl App {
         };
         let (watch_sender, watch_events) = mpsc::channel();
         let auto_updates = settings.check_for_updates;
+        let parse_requested = startup.is_some() && !restoring_update;
         let mut app = Self {
             store,
             worker,
@@ -144,6 +150,8 @@ impl App {
             tag_filter: BTreeSet::new(),
             selected: None,
             startup,
+            parse_requested,
+            pending_imports: vec![],
             selected_players: BTreeSet::new(),
             voice_open: false,
             selected_speaker: None,
@@ -213,6 +221,10 @@ impl App {
             return;
         }
         let parsing = matches!(&job, Job::Parse { output: None, .. });
+        let demo_id = match &job {
+            Job::Parse { id, .. } => Some(id.clone()),
+            _ => None,
+        };
         if let Err(e) = self.worker.sender.send(job) {
             self.error(e);
             return;
@@ -222,6 +234,7 @@ impl App {
             progress: None,
             cancel,
             parsing,
+            demo_id,
         });
     }
 
@@ -229,15 +242,6 @@ impl App {
         let Some(active) = &self.active else { return };
         if let Some(cancel) = &active.cancel {
             cancel.store(true, Ordering::Relaxed);
-        }
-        if active.parsing {
-            // Cancel the queue as well as this file, rather than immediately
-            // starting another one of thousands of pending background parses.
-            if let Some(store) = &mut self.store {
-                store.library.settings.background_parse = false;
-            }
-            self.settings_draft.background_parse = false;
-            self.mark_dirty();
         }
     }
 
@@ -316,13 +320,21 @@ impl App {
                         self.error(warnings.join("\n"));
                     }
                     if let Some(startup) = self.startup.take() {
-                        self.selected = self.store.as_ref().and_then(|s| {
+                        let selected = self.store.as_ref().and_then(|s| {
                             s.library
                                 .demos
                                 .values()
-                                .find(|d| files::path_key(&d.path) == files::path_key(&startup))
+                                .find(|d| {
+                                    d.available
+                                        && files::path_key(&d.path) == files::path_key(&startup)
+                                })
                                 .map(|d| d.id.clone())
                         });
+                        if let Some(id) = selected {
+                            self.change_selection(id);
+                        } else {
+                            self.selected = None;
+                        }
                     }
                     if self.selected.as_ref().is_none_or(|id| {
                         self.store
@@ -330,7 +342,8 @@ impl App {
                             .and_then(|s| s.library.demos.get(id))
                             .is_none_or(|d| !d.available)
                     }) {
-                        self.selected = self.filtered_ids().first().cloned();
+                        self.selected = None;
+                        self.parse_requested = false;
                     }
                 }
                 Event::Parsed {
@@ -355,8 +368,9 @@ impl App {
                                 self.load_clips();
                             }
                             self.info(format!(
-                                "Saved {} WAV clips. Source demo was not changed",
-                                parsed.clips.len()
+                                "Saved {} voice clips and {} playback tracks. Source demo was not changed",
+                                parsed.clips.iter().filter(|clip| clip.kind == ClipKind::Segment).count(),
+                                parsed.clips.iter().filter(|clip| clip.kind != ClipKind::Segment).count()
                             ));
                         }
                     }
@@ -384,6 +398,11 @@ impl App {
                 Event::Imported(result) => match result {
                     Ok(paths) => {
                         self.startup = paths.first().cloned();
+                        self.parse_requested = true;
+                        self.view = View::All;
+                        self.query.clear();
+                        self.map_filter.clear();
+                        self.tag_filter.clear();
                         self.rescan_pending = true;
                         self.info(format!("Imported {} demos; originals kept", paths.len()));
                     }
@@ -411,7 +430,7 @@ impl App {
                             continue;
                         }
                         if let Some(Ok(new_id)) = relocated {
-                            self.select(new_id);
+                            self.change_selection(new_id);
                         }
                         self.view = View::All;
                         self.refresh_watcher();
@@ -460,6 +479,11 @@ impl App {
         if self.active.is_some() || self.store.is_none() {
             return;
         }
+        if !self.pending_imports.is_empty() {
+            let paths = std::mem::take(&mut self.pending_imports);
+            self.import(paths);
+            return;
+        }
         if self.rescan_pending {
             self.rescan_pending = false;
             let folders = self
@@ -470,31 +494,23 @@ impl App {
             self.send(Job::Scan(folders), "Scanning watched folders…", None);
             return;
         }
+        if !std::mem::take(&mut self.parse_requested) {
+            return;
+        }
         let selected = self
             .selected
             .as_ref()
             .and_then(|id| self.store.as_ref()?.library.demos.get(id));
         let pending = selected
             .filter(|d| d.available && !d.cache_valid() && d.parse_error.is_none())
-            .cloned()
-            .or_else(|| {
-                let store = self.store.as_ref()?;
-                if !store.library.settings.background_parse {
-                    return None;
-                }
-                store
-                    .library
-                    .demos
-                    .values()
-                    .find(|d| d.available && !d.cache_valid() && d.parse_error.is_none())
-                    .cloned()
-            });
+            .cloned();
         if let Some(demo) = pending {
             self.parse_demo(&demo, None);
         }
     }
 
     fn parse_demo(&mut self, demo: &Demo, extract_player: Option<Option<String>>) {
+        self.parse_requested = false;
         let cancel = Arc::new(AtomicBool::new(false));
         let output = extract_player.as_ref().map(|_| {
             let root = self
@@ -529,6 +545,25 @@ impl App {
     }
 
     fn select(&mut self, id: String) {
+        self.parse_requested = true;
+        if let Some(demo) = self
+            .store
+            .as_mut()
+            .and_then(|store| store.library.demos.get_mut(&id))
+        {
+            demo.parse_error = None;
+        }
+        if self
+            .active
+            .as_ref()
+            .is_some_and(|active| active.parsing && active.demo_id.as_ref() != Some(&id))
+        {
+            self.cancel_active();
+        }
+        self.change_selection(id);
+    }
+
+    fn change_selection(&mut self, id: String) {
         if self.selected.as_ref() == Some(&id) {
             return;
         }
@@ -573,6 +608,45 @@ impl App {
     }
 
     fn import(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        if self.updater.installing {
+            self.error("An update is installing. Drop the demo again after the app restarts; original files were not changed");
+            return;
+        }
+        if paths.iter().any(|path| {
+            !files::is_demo(path)
+                && !path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"))
+        }) {
+            self.error("Drops accept .dem files and ZIP archives; extract RAR/7z files first");
+            return;
+        }
+        if self.store.is_none() {
+            self.error(
+                "Cannot import while the library is unavailable. Original files were not changed",
+            );
+            return;
+        }
+        if let Some(active) = &self.active {
+            let parsing = active.parsing;
+            for path in paths {
+                if !self.pending_imports.contains(&path) {
+                    self.pending_imports.push(path);
+                }
+            }
+            if parsing {
+                self.cancel_active();
+            }
+            self.info(if parsing {
+                "New drop queued; stopping the previous parse…"
+            } else {
+                "New drop queued until the current operation finishes"
+            });
+            return;
+        }
         let destination = self.store.as_ref().and_then(|store| {
             match &self.view {
                 View::Folder(id) => store.library.folders.iter().find(|f| &f.id == id),
@@ -580,10 +654,27 @@ impl App {
             }
             .map(|f| f.path.clone())
         });
-        match destination {
-            Some(destination) => self.send(Job::Import { paths, destination }, "Importing demos (originals are kept)…", None),
-            None => self.error("Add a watched folder before importing. Drops accept .dem files and ZIP archives; extract RAR/7z files first"),
-        }
+        let destination = match destination {
+            Some(path) => path,
+            None => {
+                let Some(store) = &mut self.store else { return };
+                match store.ensure_import_folder() {
+                    Ok(path) => {
+                        self.refresh_watcher();
+                        path
+                    }
+                    Err(error) => {
+                        self.error(format!("Cannot create the imported-demo folder: {error:#}"));
+                        return;
+                    }
+                }
+            }
+        };
+        self.send(
+            Job::Import { paths, destination },
+            "Importing demos (originals are kept)…",
+            None,
+        );
     }
 
     fn filtered_ids(&self) -> Vec<String> {

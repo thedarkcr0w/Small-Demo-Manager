@@ -39,14 +39,29 @@ maximum response time 10.2 ms). The title-bearing window was available after
 * Ignore `Library.json` and `Config.json`. Folders with the original .NET ID format
   are no longer watched, including folders imported into native data by 2.0.0.
   Their inactive annotations and all original files are retained.
-* Make background parsing explicitly opt-in, including for existing 2.0.0 data.
-  Cancel stops the background queue and is checked during validation and sign-on.
+* Remove automatic parsing, including for existing 2.0.0 data. Folder scans never
+  select or parse the first file. Only a click, drop, or explicit extraction starts
+  decoding; cache invalidation alone does not restart it.
+* Keep drops queued during other operations. A drop cancels a previous ordinary
+  parse but does not interrupt extraction, copying or other file operations.
+  An empty library gets an app-owned import folder, not a read/write dependency on
+  the old library. Source demos and archives are kept.
+* Check cancellation during validation and sign-on.
   Those stages show indeterminate progress until a tick percentage is available.
 
 Regression tests cover cache/annotation preservation, large Unicode notes,
 external renames, ambiguous fingerprints, and avoiding reuse of a moved record.
 See [BUILDING.md](BUILDING.md#startup-regression-benchmark) for the repeatable
 benchmark and interactive Windows heartbeat test.
+
+## Voice tracks
+
+Extract-all keeps the original WAV clips and creates an everyone mix plus separate
+player tracks. Overlapping clips are mixed with headroom; gaps between recorded
+voice intervals are removed. The renderer streams bounded chunks, checks cancellation,
+uses recorded clip timestamps, and never overwrites existing files. PCM fixture
+tests compare the exact combined/player samples, ordering, waveforms, and original
+file hashes. Playback has separate everyone/player rows, pause/resume, and seek.
 
 The initial 2.0.1-dev test package was confirmed before preparing the stable
 2.0.1 release. The original 2.0.0 GitHub release is not overwritten.

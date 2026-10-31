@@ -568,7 +568,7 @@ impl App {
                 if demo.parse_error.is_some() {
                     "Parse failed — select for details".into()
                 } else {
-                    "Waiting for parser…".into()
+                    "Click to load match data".into()
                 }
             });
         ui.painter().text(
@@ -705,21 +705,32 @@ impl App {
             .and_then(|id| self.store.as_ref()?.library.demos.get(id))
             .cloned();
         let Some(demo) = demo.filter(|d| d.available) else {
+            let has_demos = self
+                .store
+                .as_ref()
+                .is_some_and(|store| store.library.demos.values().any(|demo| demo.available));
             ui.add_space(70.0);
             ui.vertical_centered(|ui| {
                 ui.label(
-                    RichText::new("Your demos. Nothing in the way.")
-                        .size(24.0)
-                        .strong(),
+                    RichText::new(if has_demos {
+                        "Choose a demo to open"
+                    } else {
+                        "Your demos. Nothing in the way."
+                    })
+                    .size(24.0)
+                    .strong(),
                 );
-                small(ui, "A native CS2 library — no browser, no sample matches.");
+                small(
+                    ui,
+                    "Demos are parsed only when clicked or dropped into the window.",
+                );
                 ui.add_space(20.0);
                 if ui.add(primary("+ Add your demo folder")).clicked() {
                     self.pick_folder();
                 }
                 small(
                     ui,
-                    "Or drag a .dem file / ZIP archive into the window after adding a folder.",
+                    "Or drop a .dem file or ZIP archive here. Original files are kept.",
                 );
             });
             return;
@@ -803,14 +814,12 @@ impl App {
                     }
                 } else if demo.parse_error.is_none() {
                     card().show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label("Reading real match data…");
-                        });
-                        small(
-                            ui,
-                            "Map, scores, players and rounds will appear after parsing.",
-                        );
+                        if self.parse_requested || self.active.as_ref().is_some_and(|active| active.demo_id.as_ref() == Some(&demo.id)) {
+                            ui.horizontal(|ui| { ui.spinner(); ui.label("Reading real match data…"); });
+                        } else {
+                            small(ui, "This demo has not been parsed. Other library files are not read automatically.");
+                            if ui.button("Open demo").clicked() { self.select(demo.id.clone()); }
+                        }
                     });
                 }
                 self.annotations(ui, &demo);
@@ -1357,6 +1366,21 @@ impl App {
                                 .clicked()
                             {
                                 self.selected_speaker = Some(key);
+                                let track = player
+                                    .steam_id
+                                    .as_deref()
+                                    .and_then(|steam| {
+                                        audio::latest_track(
+                                            &self.clips,
+                                            ClipKind::PlayerTrack,
+                                            Some(steam),
+                                        )
+                                    })
+                                    .cloned();
+                                self.playback = None;
+                                if let Some(track) = track {
+                                    self.play(&track);
+                                }
                             }
                             small(
                                 ui,
@@ -1393,51 +1417,77 @@ impl App {
                     "Only voice actually recorded in the demo can be extracted.",
                 );
             });
-        Panel::left("voice_events").default_size(220.0).min_size(170.0).frame(card()).show(ui, |ui| {
-            eyebrow(ui, "Selected player");
+        CentralPanel::default().frame(card()).show(ui, |ui| {
+            eyebrow(ui, "Voice playback");
+            small(ui, "Speech only · silent gaps skipped · overlapping voices mixed · original clips kept");
+            let everyone = audio::latest_track(&self.clips, ClipKind::Everyone, None).cloned();
+            self.voice_track_row(ui, "everyone", "Everyone", everyone.as_ref());
+            let selected = players.iter().find(|player| Some(player.key()) == self.selected_speaker);
+            let player_track = selected.and_then(|player| player.steam_id.as_deref()).and_then(|steam| audio::latest_track(&self.clips, ClipKind::PlayerTrack, Some(steam))).cloned();
+            self.voice_track_row(ui, "player", selected.map(|player| player.name.as_str()).unwrap_or("Selected player"), player_track.as_ref());
             ui.separator();
-            let steam = players.iter().find(|p| Some(p.key()) == self.selected_speaker).and_then(|p| p.steam_id.as_deref());
-            let clips: Vec<_> = self.clips.iter().filter(|c| steam.is_some() && c.steam_id.as_deref() == steam).cloned().collect();
-            ScrollArea::vertical().id_salt("voice_events_scroll").max_height(height).show(ui, |ui| {
-                if clips.is_empty() { small(ui, "No saved clips for this player. Extract their recorded voice first."); }
-                for clip in clips {
-                    ui.horizontal(|ui| { ui.label(RichText::new(clip.round.map(|n| format!("Round {n}")).unwrap_or_else(|| "Outside a recorded round".into())).strong()); if ui.small_button("▶").clicked() { self.play(&clip); } });
-                    small(ui, format!("Demo {} · {:.2} s", duration(Some(clip.demo_seconds)), clip.duration));
-                    ui.separator();
-                }
+            let count = self.clips.iter().filter(|clip| clip.kind == ClipKind::Segment).count();
+            CollapsingHeader::new(format!("Individual clips ({count})")).show(ui, |ui| {
+                ui.add(TextEdit::singleline(&mut self.clip_query).hint_text("Search clips by player…").desired_width(f32::INFINITY));
+                let query = self.clip_query.to_lowercase();
+                let clips: Vec<_> = self.clips.iter().filter(|clip| clip.kind == ClipKind::Segment && clip.player.to_lowercase().contains(&query)).cloned().collect();
+                ScrollArea::vertical().id_salt("voice_saved_scroll").max_height((height - 330.0).max(100.0)).show_rows(ui, 54.0, clips.len(), |ui, rows| {
+                    for clip in &clips[rows] {
+                        ui.push_id((&clip.id, &clip.path), |ui| {
+                            ui.horizontal(|ui| {
+                                let playing = self.playback.as_ref().is_some_and(|playback| playback.clip_id == clip.id);
+                                if ui.button(if playing { "■" } else { "▶" }).clicked() { if playing { self.playback = None; } else { self.play(clip); } }
+                                ui.vertical(|ui| {
+                                    ui.label(RichText::new(&clip.player).strong());
+                                    small(ui, format!("Demo {} · {:.2} s · {}", duration(Some(clip.demo_seconds)), clip.duration, clip.round.map(|round| format!("Round {round}")).unwrap_or_else(|| "Unnumbered".into())));
+                                });
+                                if ui.small_button("▱").on_hover_text("Reveal original WAV clip").clicked() && let Err(error) = files::reveal(&clip.path) { self.error(error); }
+                            });
+                            ui.separator();
+                        });
+                    }
+                });
             });
         });
-        CentralPanel::default().frame(card()).show(ui, |ui| {
-            ui.horizontal(|ui| { eyebrow(ui, "Saved voice audio"); small(ui, format!("{} files", self.clips.len())); });
-            ui.add(TextEdit::singleline(&mut self.clip_query).hint_text("Search clips by player…").desired_width(f32::INFINITY));
-            ui.separator();
-            let clips: Vec<_> = self.clips.iter().filter(|c| c.player.to_lowercase().contains(&self.clip_query.to_lowercase())).cloned().collect();
-            ScrollArea::vertical().id_salt("voice_saved_scroll").max_height(height).show(ui, |ui| {
-                if clips.is_empty() {
-                    ui.add_space(35.0); ui.vertical_centered(|ui| { ui.label(RichText::new("No clips to show").strong().color(SECONDARY)); small(ui, "Extract a player or the whole demo. No waveform is shown until audio exists."); });
+    }
+
+    fn voice_track_row(&mut self, ui: &mut Ui, id: &str, title: &str, clip: Option<&Clip>) {
+        ui.push_id(id, |ui| {
+            card().show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(title).strong().color(ACCENT));
+                    if let Some(clip) = clip {
+                        small(ui, duration(Some(clip.duration)));
+                        let playing = self.playback.as_ref().filter(|playback| playback.clip_id == clip.id);
+                        let button = match playing { Some(playback) if playback.paused() => "▶ Resume", Some(_) => "Ⅱ Pause", None => "▶ Play" };
+                        if ui.button(button).clicked() {
+                            if let Some(playback) = &self.playback.as_ref().filter(|playback| playback.clip_id == clip.id) {
+                                if playback.paused() { playback.resume(); } else { playback.pause(); }
+                            } else { self.play(clip); }
+                        }
+                        if ui.button("■ Stop").clicked() && self.playback.as_ref().is_some_and(|playback| playback.clip_id == clip.id) { self.playback = None; }
+                        if ui.small_button("▱").on_hover_text("Reveal combined WAV track").clicked() && let Err(error) = files::reveal(&clip.path) { self.error(error); }
+                    }
+                });
+                let Some(clip) = clip else {
+                    small(ui, if id == "everyone" { "Extract all players to create the everyone track." } else { "Click a player, then extract that player or everyone to create their track." });
+                    return;
+                };
+                let progress = self.playback.as_ref().filter(|playback| playback.clip_id == clip.id).map(|playback| (playback.position() / clip.duration).clamp(0.0, 1.0) as f32).unwrap_or(0.0);
+                let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width().max(80.0), 42.0), Sense::click());
+                ui.painter().rect_filled(rect, 4, BG);
+                let count = clip.peaks.len().max(1);
+                for (index, peak) in clip.peaks.iter().enumerate() {
+                    let x = rect.left() + (index as f32 + 0.5) / count as f32 * rect.width();
+                    let h = peak.clamp(0.0, 1.0) * rect.height() * 0.46;
+                    ui.painter().line_segment([pos2(x, rect.center().y - h), pos2(x, rect.center().y + h)], Stroke::new(3.0, if index as f32 / count as f32 <= progress { ACCENT } else { MUTED }));
                 }
-                for clip in &clips {
-                    ui.push_id((&clip.id, &clip.path), |ui| {
-                        ui.horizontal(|ui| {
-                            let playing = self.playback.as_ref().is_some_and(|p| p.clip_id == clip.id);
-                            if ui.button(if playing { "■" } else { "▶" }).clicked() { if playing { self.playback = None; } else { self.play(clip); } }
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new(format!("{} · {} · {}", clip.player, clip.round.map(|n| format!("Round {n}")).unwrap_or_else(|| "Unnumbered".into()), duration(Some(clip.demo_seconds)))).size(11.0).strong());
-                                let width = ui.available_width().clamp(80.0, 260.0);
-                                let (rect, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
-                                let progress = self.playback.as_ref().filter(|p| p.clip_id == clip.id).map(|p| (p.position() / clip.duration).clamp(0.0, 1.0) as f32).unwrap_or(0.0);
-                                let n = clip.peaks.len().max(1);
-                                for (i, peak) in clip.peaks.iter().enumerate() {
-                                    let x = rect.left() + (i as f32 + 0.5) / n as f32 * rect.width();
-                                    let h = peak.clamp(0.0, 1.0) * rect.height() * 0.5;
-                                    ui.painter().line_segment([pos2(x, rect.center().y - h), pos2(x, rect.center().y + h)], Stroke::new(2.0, if i as f32 / n as f32 <= progress && playing { ACCENT } else { MUTED }));
-                                }
-                            });
-                            ui.vertical(|ui| { small(ui, format!("{:.2}s", clip.duration)); small(ui, "WAV"); });
-                            if ui.small_button("▱").on_hover_text("Reveal WAV in folder").clicked() && let Err(e) = files::reveal(&clip.path) { self.error(e); }
-                        });
-                        ui.separator();
-                    });
+                if response.clicked() && let Some(position) = response.interact_pointer_pos() {
+                    let fraction = ((position.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+                    if !self.playback.as_ref().is_some_and(|playback| playback.clip_id == clip.id) { self.play(clip); }
+                    if let Some(playback) = self.playback.as_ref().filter(|playback| playback.clip_id == clip.id)
+                        && let Err(error) = playback.seek(fraction as f64 * clip.duration) { self.error(error); }
                 }
             });
         });
@@ -1514,8 +1564,7 @@ impl App {
                     ui.checkbox(&mut self.settings_draft.move_files, "Move instead of copying to CS2 (removes original after verification)");
                     ui.add_enabled_ui(self.settings_draft.move_files, |ui| { ui.checkbox(&mut self.settings_draft.backup_before_move, "Keep a verified backup before moving"); });
                     small(ui, "Backups: %LocalAppData%/Small-Demo-Manager/Backups.native");
-                    ui.checkbox(&mut self.settings_draft.background_parse, "Parse the library in the background for player / SteamID search");
-                    small(ui, "Off by default. Enabling this reads every watched demo, one at a time. Cancel also stops the background queue.");
+                    small(ui, "Demos are parsed only when clicked or dropped. Adding or rescanning a folder never starts bulk parsing. Player search uses demos you have already opened.");
                     ui.separator();
                     self.update_settings(ui);
                     ui.separator();
@@ -1525,7 +1574,7 @@ impl App {
                             let path = PathBuf::from(self.cs2_input.trim());
                             if !path.as_os_str().is_empty() && let Err(e) = steam::validate_destination(&path) { self.error(e); return; }
                             self.settings_draft.cs2_path = path;
-                            self.settings_draft.background_parse_opt_in = true;
+                            self.settings_draft.background_parse = false;
                             if let Some(store) = &mut self.store { store.library.settings = self.settings_draft.clone(); }
                             self.persist(); done = true;
                         }

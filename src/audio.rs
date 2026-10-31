@@ -1,6 +1,8 @@
+mod tracks;
+
 use crate::{
     files,
-    model::{Clip, Player},
+    model::{Clip, ClipKind, Player},
 };
 use anyhow::{Context, Result, ensure};
 use source2_demo::proto::{CMsgVoiceAudio, CSvcMsgVoiceData};
@@ -9,6 +11,7 @@ use std::{
     fs::{self, File},
     io::BufReader,
     path::{Path, PathBuf},
+    sync::atomic::AtomicBool,
 };
 
 const RATE: u32 = 48000;
@@ -164,11 +167,20 @@ impl AudioWriter {
             duration: speaker.samples.len() as f64 / RATE as f64,
             path,
             peaks: waveform(&speaker.samples, 64),
+            kind: ClipKind::Segment,
         });
         Ok(())
     }
 
-    pub fn finish(mut self, players: &[Player]) -> Result<Vec<Clip>> {
+    pub fn finish(self, players: &[Player]) -> Result<Vec<Clip>> {
+        self.finish_cancellable(players, &AtomicBool::new(false))
+    }
+
+    pub fn finish_cancellable(
+        mut self,
+        players: &[Player],
+        cancel: &AtomicBool,
+    ) -> Result<Vec<Clip>> {
         for key in self.speakers.keys().cloned().collect::<Vec<_>>() {
             self.flush(&key)?;
         }
@@ -185,9 +197,27 @@ impl AudioWriter {
                 .total_cmp(&b.demo_seconds)
                 .then(a.player.cmp(&b.player))
         });
+        let tracks = tracks::render(&self.root, &self.clips, self.filter.is_none(), cancel)?;
+        self.clips.extend(tracks);
         files::atomic_json(&self.root.join("clips.json"), &self.clips)?;
         Ok(self.clips)
     }
+}
+
+pub fn latest_track<'a>(
+    clips: &'a [Clip],
+    kind: ClipKind,
+    steam_id: Option<&str>,
+) -> Option<&'a Clip> {
+    clips
+        .iter()
+        .filter(|clip| clip.kind == kind && clip.steam_id.as_deref() == steam_id)
+        .max_by(|left, right| {
+            left.path
+                .parent()
+                .and_then(Path::parent)
+                .cmp(&right.path.parent().and_then(Path::parent))
+        })
 }
 
 fn opus_packets(audio: &CMsgVoiceAudio) -> Result<Vec<&[u8]>> {
@@ -281,6 +311,22 @@ impl Playback {
     pub fn finished(&self) -> bool {
         self.sink.empty()
     }
+    pub fn paused(&self) -> bool {
+        self.sink.is_paused()
+    }
+    pub fn pause(&self) {
+        self.sink.pause();
+    }
+    pub fn resume(&self) {
+        self.sink.play();
+    }
+    pub fn seek(&self, seconds: f64) -> Result<()> {
+        let position = std::time::Duration::try_from_secs_f64(seconds.max(0.0))
+            .map_err(|_| anyhow::anyhow!("Invalid WAV seek position"))?;
+        self.sink
+            .try_seek(position)
+            .map_err(|error| anyhow::anyhow!("Cannot seek in this WAV track: {error:?}"))
+    }
 }
 
 #[cfg(test)]
@@ -345,7 +391,27 @@ mod tests {
                 .expect("push");
         }
         let clips = writer.finish(&[]).expect("finish");
-        assert_eq!(clips.len(), 1);
+        assert_eq!(
+            clips
+                .iter()
+                .filter(|clip| clip.kind == ClipKind::Segment)
+                .count(),
+            1
+        );
+        assert_eq!(
+            clips
+                .iter()
+                .filter(|clip| clip.kind == ClipKind::Everyone)
+                .count(),
+            1
+        );
+        assert_eq!(
+            clips
+                .iter()
+                .filter(|clip| clip.kind == ClipKind::PlayerTrack)
+                .count(),
+            1
+        );
         assert_eq!(clips[0].duration, 0.04);
         assert_eq!(clips[0].demo_seconds, 1.0);
         let wav = hound::WavReader::open(&clips[0].path).expect("wav");

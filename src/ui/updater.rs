@@ -146,7 +146,8 @@ impl App {
     }
 
     pub(super) fn begin_update_install(&mut self, ctx: &Context) -> bool {
-        if self.active.is_some() || self.updater.task.is_some() {
+        if self.active.is_some() || !self.pending_imports.is_empty() || self.updater.task.is_some()
+        {
             return false;
         }
         let Some(store) = &self.store else {
@@ -202,7 +203,7 @@ impl App {
         } else if self.updater.prepared.is_some() {
             if ui
                 .add_enabled(
-                    self.active.is_none() && cfg!(windows),
+                    self.active.is_none() && self.pending_imports.is_empty() && cfg!(windows),
                     primary("Restart & install…"),
                 )
                 .clicked()

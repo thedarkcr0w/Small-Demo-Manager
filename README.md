@@ -30,9 +30,9 @@ in-game spectator commands — with the familiar dark/amber design, rebuilt in R
 | | |
 |---|---|
 | 📁 **Watched folder library** | Recursively watches your demo folders, refreshes changed files, and offers table, card, and hybrid layouts. |
-| 🔎 **Library search** | Find demos by filename, parsed player or SteamID, map, server, team, tag, or note. Optional background parsing makes player search work across the library. |
+| 🔎 **Library search** | Find demos by filename, parsed player or SteamID, map, server, team, tag, or note. Player search uses demos you have opened; folders are never bulk-parsed. |
 | 🏆 **Match details** | Recorded scoreboards, K/D/A, damage, ADR, and observed round results. Missing data stays unavailable — no invented IDs, ratings, or stats. |
-| 🎙️ **Per-player voice extractor** | Extract one player or everyone to WAV, with measured waveforms and native audio playback. Previous extractions are kept. |
+| 🎙️ **Voice extractor** | Extract everyone into a combined track, with a separate player-only playback row. Individual WAV clips, measured waveforms, and previous extractions are kept. |
 | 📣 **Spectator voice commands** | Select players and copy the correct low/high `tv_listen_voice_indices` masks. Profile links use recorded SteamIDs. |
 | 🗂️ **Tags, notes & favorites** | Save annotations in the native library; in-app renames and transfers preserve them. The old app's library is not imported. |
 | 🪟 **Copy or move to CS2** | Copy by default, or move with an optional backup. SHA-256 verification happens before removing the source; existing files are never overwritten. |
@@ -74,12 +74,19 @@ under `%LocalAppData%\Small-Demo-Manager\`:
 * `Library.native.json` — settings, watched folders, annotations, and parse caches.
 * `Audio.native/` — extracted WAV clips, separated by demo and extraction run.
 * `Backups.native/` — optional verified backups before moving demos.
+* `Imports.native/` — imported demos when no watched destination was selected.
 
 Existing `Library.json`, `Config.json`, and legacy `Audio/` are ignored and not modified.
 Old WAVs remain on disk but are not automatically added to the native clip browser.
 Folders imported from the old app by 2.0.0 are no longer watched; add only the
 folders you want to use. Their previously imported annotations are kept inactive
-in the native data file. Background parsing is off until enabled in Settings.
+in the native data file. Folder scans only list demos; click a demo or drop one
+into the app to parse it. A drop works even before you add a watched folder.
+
+**Extract all players** creates an everyone track and separate per-player tracks.
+Click a player to switch the second playback row to just their voice. Combined
+tracks keep recorded order, mix overlaps with headroom, and skip silent gaps
+between clips; the original timestamped clips are still available below.
 
 ### App updates
 
@@ -118,7 +125,8 @@ CLI diagnostics, and the source layout.
 **31.10.2026 — 2.0.1**
 
 * Fixed startup and rescan stalls with large demo libraries.
-* Stopped importing the old library; background parsing is now opt-in.
+* Stopped importing the old library; parsing now starts only on click or drop.
+* Added everyone and selected-player voice tracks while keeping original clips.
 * Removed bundled documentation and screenshots from the Windows ZIP.
 
 Read the [full patch notes and previous dated updates](PATCHNOTES.md).

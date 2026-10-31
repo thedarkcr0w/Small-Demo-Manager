@@ -47,11 +47,9 @@ impl Store {
         library
             .folders
             .retain(|folder| !legacy_folder_id(&folder.id));
-        // 2.0.0 enabled bulk parsing by default, including after legacy migration.
-        // Require an explicit choice in Settings before indexing an entire library.
-        if !library.settings.background_parse_opt_in {
-            library.settings.background_parse = false;
-        }
+        // Keep the old field disabled for backwards-compatible saved data.
+        // Scanning a folder must never trigger bulk demo parsing.
+        library.settings.background_parse = false;
         Ok(Self {
             root,
             library,
@@ -102,6 +100,22 @@ impl Store {
         });
         self.save()?;
         Ok(id)
+    }
+
+    pub fn ensure_import_folder(&mut self) -> Result<PathBuf> {
+        let path = self.root.join("Imports.native");
+        fs::create_dir_all(&path)?;
+        let id = self.add_folder(path.clone())?;
+        if let Some(folder) = self
+            .library
+            .folders
+            .iter_mut()
+            .find(|folder| folder.id == id)
+        {
+            folder.label = "Imported demos".into();
+        }
+        self.save()?;
+        Ok(path)
     }
 
     pub fn apply_scan(&mut self, scan: Scan) {
@@ -580,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn bulk_parsing_is_off_until_the_user_explicitly_opts_in() {
+    fn old_bulk_parsing_settings_never_start_automatic_parsing() {
         let dir = tempfile::tempdir().expect("dir");
         fs::write(
             dir.path().join("Library.native.json"),
@@ -592,11 +606,9 @@ mod tests {
         assert!(store.library.demos["kept"].favorite);
         assert_eq!(store.library.demos["kept"].note, "keep notes");
         store.library.settings.background_parse = true;
-        store.library.settings.background_parse_opt_in = true;
         store.save().expect("save explicit preference");
         drop(store);
         let reopened = Store::open(dir.path().into()).expect("reopen");
-        assert!(reopened.library.settings.background_parse);
-        assert!(reopened.library.settings.background_parse_opt_in);
+        assert!(!reopened.library.settings.background_parse);
     }
 }

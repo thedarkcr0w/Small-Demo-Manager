@@ -18,7 +18,6 @@ pub struct Settings {
     pub move_files: bool,
     pub backup_before_move: bool,
     pub background_parse: bool,
-    pub background_parse_opt_in: bool,
     pub check_for_updates: bool,
     pub layout: Layout,
 }
@@ -30,7 +29,6 @@ impl Default for Settings {
             move_files: false,
             backup_before_move: true,
             background_parse: false,
-            background_parse_opt_in: false,
             check_for_updates: true,
             layout: Layout::Hybrid,
         }
@@ -176,6 +174,16 @@ pub struct Clip {
     pub path: PathBuf,
     /// Measured normalized peak amplitudes, not a seeded visualization.
     pub peaks: Vec<f32>,
+    #[serde(default)]
+    pub kind: ClipKind,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ClipKind {
+    #[default]
+    Segment,
+    Everyone,
+    PlayerTrack,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

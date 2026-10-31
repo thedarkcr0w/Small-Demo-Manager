@@ -110,7 +110,8 @@ pub fn parse(
         );
         let game = observer.game.clone();
         let clips = if let Some(audio) = observer.audio.take() {
-            audio.finish(&game.players)?
+            progress(-1.0);
+            audio.finish_cancellable(&game.players, &observer.cancel)?
         } else {
             vec![]
         };
