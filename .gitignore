@@ -1,6 +1,13 @@
 # Native build and package output
 /target/
 /dist/
+**/*.rs.bk
+*.pdb
+*.profraw
+
+# Build output left over from the pre-2.0 C#/.NET app
+/bin/
+/obj/
 
 # Local demo fixtures and extracted application data
 *.dem
