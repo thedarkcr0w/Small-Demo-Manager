@@ -32,6 +32,7 @@ pub(crate) enum FieldDecoder {
     Float32(Float32Decoder),
     QuantizedFloat(QuantizedFloatDecoder),
     QAngle(QAngleDecoder),
+    FixedInt(FixedIntDecoder),
 
     CCSGameModeRules,
 }
@@ -39,6 +40,15 @@ pub(crate) enum FieldDecoder {
 impl FieldDecoder {
     #[inline]
     pub(crate) fn from_field(field_type: &FieldType, properties: FieldProperties) -> Self {
+        let decoder = Self::from_base_type(field_type, properties);
+        match properties.encoder.and_then(FieldEncoder::fixed_int_bits) {
+            Some(bits) => FixedIntDecoder::wrap(decoder, bits),
+            None => decoder,
+        }
+    }
+
+    #[inline]
+    fn from_base_type(field_type: &FieldType, properties: FieldProperties) -> Self {
         match field_type.base.as_ref() {
             "bool" | "CBodyComponent" | "CPhysicsComponent" | "CRenderComponent" => {
                 FieldDecoder::Boolean
@@ -117,6 +127,7 @@ impl Decode for FieldDecoder {
             FieldDecoder::Float32(decoder) => decoder.decode(reader),
             FieldDecoder::QuantizedFloat(decoder) => decoder.decode(reader),
             FieldDecoder::QAngle(decoder) => decoder.decode(reader),
+            FieldDecoder::FixedInt(decoder) => decoder.decode(reader),
 
             FieldDecoder::CCSGameModeRules => FieldValue::Unsigned64({
                 reader.refill();
@@ -156,6 +167,7 @@ impl Skip for FieldDecoder {
             FieldDecoder::Float32(decoder) => decoder.skip(reader),
             FieldDecoder::QuantizedFloat(decoder) => decoder.skip(reader),
             FieldDecoder::QAngle(decoder) => decoder.skip(reader),
+            FieldDecoder::FixedInt(decoder) => decoder.skip(reader),
 
             FieldDecoder::CCSGameModeRules => {
                 reader.refill();
@@ -188,6 +200,7 @@ impl Encode for FieldDecoder {
             FieldDecoder::Float32(decoder) => decoder.encode(writer, value),
             FieldDecoder::QuantizedFloat(decoder) => decoder.encode(writer, &value.f32()),
             FieldDecoder::QAngle(decoder) => decoder.encode(writer, value),
+            FieldDecoder::FixedInt(decoder) => decoder.encode(writer, value),
             FieldDecoder::CCSGameModeRules => {
                 if let FieldValue::Unsigned64(value) = value {
                     writer.write_bit(value >> 32 != 0)?;
@@ -387,6 +400,112 @@ impl Encode for Unsigned8Decoder {
         } else {
             writer.write_var_u32(v as u32)
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum FixedIntKind {
+    Signed8,
+    Signed16,
+    Signed32,
+    Unsigned8,
+    Unsigned16,
+    Unsigned32,
+}
+
+/// Integer field sent as `bits` raw bits (`fixed8` / `fixed16` / `fixed32`
+/// encoders) instead of a varint. Values keep the field's declared integer
+/// type; signed fields are sign-extended from `bits`.
+#[derive(Clone, Copy)]
+pub(crate) struct FixedIntDecoder {
+    pub(crate) kind: FixedIntKind,
+    pub(crate) bits: u32,
+}
+
+impl FixedIntDecoder {
+    /// Replaces an 8/16/32-bit integer decoder with its fixed-width form.
+    /// Other decoders (floats, vectors, strings, 64-bit values) are returned
+    /// unchanged because the fixed-width encoders do not apply to them.
+    pub(crate) fn wrap(decoder: FieldDecoder, bits: u32) -> FieldDecoder {
+        let kind = match decoder {
+            FieldDecoder::Signed8(_) => FixedIntKind::Signed8,
+            FieldDecoder::Signed16 => FixedIntKind::Signed16,
+            FieldDecoder::Signed32 => FixedIntKind::Signed32,
+            FieldDecoder::Unsigned8(_) => FixedIntKind::Unsigned8,
+            FieldDecoder::Unsigned16 => FixedIntKind::Unsigned16,
+            FieldDecoder::Unsigned32 => FixedIntKind::Unsigned32,
+            other => return other,
+        };
+        FieldDecoder::FixedInt(FixedIntDecoder { kind, bits })
+    }
+
+    #[inline]
+    fn is_signed(&self) -> bool {
+        matches!(
+            self.kind,
+            FixedIntKind::Signed8 | FixedIntKind::Signed16 | FixedIntKind::Signed32
+        )
+    }
+
+    #[inline]
+    fn mask(&self) -> u32 {
+        if self.bits >= 32 {
+            u32::MAX
+        } else {
+            (1u32 << self.bits) - 1
+        }
+    }
+
+    #[inline]
+    fn value_from_raw(&self, raw: u32) -> FieldValue {
+        if self.is_signed() {
+            let shift = 32 - self.bits;
+            let v = ((raw << shift) as i32) >> shift;
+            match self.kind {
+                FixedIntKind::Signed8 => FieldValue::Signed8(v as i8),
+                FixedIntKind::Signed16 => FieldValue::Signed16(v as i16),
+                _ => FieldValue::Signed32(v),
+            }
+        } else {
+            match self.kind {
+                FixedIntKind::Unsigned8 => FieldValue::Unsigned8(raw as u8),
+                FixedIntKind::Unsigned16 => FieldValue::Unsigned16(raw as u16),
+                _ => FieldValue::Unsigned32(raw),
+            }
+        }
+    }
+
+    #[inline]
+    fn raw_from_value(&self, value: &FieldValue) -> u32 {
+        let raw = match self.kind {
+            FixedIntKind::Signed8 => value.i8() as i32 as u32,
+            FixedIntKind::Signed16 => value.i16() as i32 as u32,
+            FixedIntKind::Signed32 => value.i32() as u32,
+            FixedIntKind::Unsigned8 => value.u8() as u32,
+            FixedIntKind::Unsigned16 => value.u16() as u32,
+            FixedIntKind::Unsigned32 => value.u32(),
+        };
+        raw & self.mask()
+    }
+}
+
+impl Decode for FixedIntDecoder {
+    #[inline]
+    fn decode(&self, reader: &mut SliceReader) -> FieldValue {
+        self.value_from_raw(reader.read_bits(self.bits))
+    }
+}
+
+impl Skip for FixedIntDecoder {
+    #[inline]
+    fn skip(&self, reader: &mut SliceReader) {
+        reader.skip_bits(self.bits);
+    }
+}
+
+impl Encode for FixedIntDecoder {
+    fn encode(&self, writer: &mut BitstreamWriter<'_>, value: &FieldValue) -> io::Result<()> {
+        writer.write_bits(self.bits, self.raw_from_value(value) as u64)
     }
 }
 
@@ -933,5 +1052,132 @@ impl Skip for QuantizedFloatDecoder {
         }
 
         reader.skip_bits(self.bit_count);
+    }
+}
+
+#[cfg(test)]
+mod fixed_int_tests {
+    use super::*;
+
+    fn props(encoder: Option<FieldEncoder>) -> FieldProperties {
+        FieldProperties {
+            encoder,
+            encoder_flags: 0,
+            bit_count: 0,
+            low_value: 0.0,
+            high_value: 0.0,
+        }
+    }
+
+    fn decoder(var_type: &str, encoder: &str) -> FieldDecoder {
+        let field_type = FieldType::new(var_type);
+        FieldDecoder::from_field(&field_type, props(FieldEncoder::from_str(encoder)))
+    }
+
+    /// Writes `bits`-wide raw values followed by a 0xA5 sentinel byte, then
+    /// decodes them so a misread width shows up as a sentinel mismatch.
+    fn round_trip(decoder: &FieldDecoder, values: &[FieldValue]) -> Vec<FieldValue> {
+        let mut buffer = Vec::new();
+        {
+            let mut writer = BitstreamWriter::new(&mut buffer);
+            for value in values {
+                decoder.encode(&mut writer, value).expect("encode");
+            }
+            writer.write_bits(8, 0xA5).expect("sentinel");
+            writer.flush().expect("flush");
+        }
+        // Padding keeps the reader's lookahead refill in bounds.
+        buffer.extend([0; 8]);
+        let mut reader = SliceReader::new(&buffer);
+        let decoded = values.iter().map(|_| decoder.decode(&mut reader)).collect();
+        assert_eq!(reader.read_bits(8), 0xA5, "fixed-width field desynced");
+        decoded
+    }
+
+    fn kind(decoder: &FieldDecoder) -> Option<(FixedIntKind, u32)> {
+        match decoder {
+            FieldDecoder::FixedInt(d) => Some((d.kind, d.bits)),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn fixed8_uint8_array_reads_raw_bits_for_values_above_127() {
+        // CCSPlayerController.m_recentKillQueue after the 2026-11-11 update.
+        let d = decoder("uint8[8]", "fixed8");
+        assert_eq!(kind(&d), Some((FixedIntKind::Unsigned8, 8)));
+        let values = [FieldValue::Unsigned8(200), FieldValue::Unsigned8(255)];
+        assert_eq!(round_trip(&d, &values), values);
+
+        let mut buffer = vec![200u8, 0xA5];
+        buffer.extend([0; 8]);
+        let mut reader = SliceReader::new(&buffer);
+        assert_eq!(d.decode(&mut reader), FieldValue::Unsigned8(200));
+        assert_eq!(reader.read_bits(8), 0xA5);
+    }
+
+    #[test]
+    fn fixed_width_signed_values_are_sign_extended() {
+        let d = decoder("int8", "fixed8");
+        assert_eq!(kind(&d), Some((FixedIntKind::Signed8, 8)));
+        let values = [FieldValue::Signed8(-3), FieldValue::Signed8(127)];
+        assert_eq!(round_trip(&d, &values), values);
+
+        let d = decoder("int16", "fixed16");
+        let values = [FieldValue::Signed16(-1000), FieldValue::Signed16(i16::MAX)];
+        assert_eq!(round_trip(&d, &values), values);
+
+        let d = decoder("int32", "fixed32");
+        let values = [FieldValue::Signed32(i32::MIN), FieldValue::Signed32(-1)];
+        assert_eq!(round_trip(&d, &values), values);
+
+        // A 32-bit field sent in 8 bits still sign-extends from the wire width.
+        let d = decoder("int32", "fixed8");
+        assert_eq!(
+            round_trip(&d, &[FieldValue::Signed32(-2)]),
+            [FieldValue::Signed32(-2)]
+        );
+    }
+
+    #[test]
+    fn fixed_width_unsigned_values_keep_declared_type() {
+        let d = decoder("uint16", "fixed16");
+        assert_eq!(kind(&d), Some((FixedIntKind::Unsigned16, 16)));
+        let values = [FieldValue::Unsigned16(60000)];
+        assert_eq!(round_trip(&d, &values), values);
+
+        let d = decoder("uint32", "fixed32");
+        assert_eq!(kind(&d), Some((FixedIntKind::Unsigned32, 32)));
+        let values = [FieldValue::Unsigned32(0xDEAD_BEEF)];
+        assert_eq!(round_trip(&d, &values), values);
+
+        // Enum-like types fall back to u32 (u8 for fixed8), as before.
+        let d = decoder("CSPlayerState", "fixed16");
+        assert_eq!(kind(&d), Some((FixedIntKind::Unsigned32, 16)));
+        let d = decoder("CSPlayerState", "fixed8");
+        assert_eq!(kind(&d), Some((FixedIntKind::Unsigned8, 8)));
+    }
+
+    #[test]
+    fn fixed_width_applies_to_vector_elements() {
+        let field_type = FieldType::new("CNetworkUtlVectorBase< uint8 >");
+        let element = field_type.generic.as_ref().expect("generic");
+        let d = FieldDecoder::from_field(element, props(Some(FieldEncoder::Fixed8)));
+        assert_eq!(kind(&d), Some((FixedIntKind::Unsigned8, 8)));
+    }
+
+    #[test]
+    fn non_integer_and_unencoded_fields_are_unchanged() {
+        assert!(matches!(
+            decoder("float32", "fixed32"),
+            FieldDecoder::Float32(_)
+        ));
+        assert!(matches!(
+            decoder("uint64", "fixed64"),
+            FieldDecoder::Unsigned64(_)
+        ));
+        assert!(matches!(decoder("bool", "fixed8"), FieldDecoder::Boolean));
+        assert!(matches!(decoder("uint16", ""), FieldDecoder::Unsigned16));
+        assert!(matches!(decoder("int32", ""), FieldDecoder::Signed32));
     }
 }

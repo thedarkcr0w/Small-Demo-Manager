@@ -17,6 +17,13 @@ licenses. Local patches are tracked here rather than modifying a Cargo cache:
   it. Decode nested game-mode fields against the declared derived serializer
   (wire selector zero = base, 1..N = derived types). This fixes Deathmatch and
   AnimGraph2 protocol fixtures with an empty `CCSGameModeRules` base serializer.
+* Decode `fixed8` / `fixed16` / `fixed32` integer fields (including array and
+  vector elements) as raw bits instead of varints, keeping each field's
+  declared integer type and sign-extending signed fields. The 2026-11-11 CS2
+  update started sending `CCSPlayerController` fields such as
+  `m_recentKillQueue` (`uint8[8]`) and `m_iCompetitiveRankType` this way, and a
+  varint read of values >= 128 desynced the entity stream. Matches
+  demoinfocs-golang v5.3.0 (#764 / #765).
 
 Application-side compatibility handling additionally derives round results
 only from observed, stable-roster score increments when modern demos omit

@@ -56,7 +56,8 @@ not release-tested.
 
 > [!IMPORTANT]
 > Valve occasionally changes the CS2 demo format. This release includes fixes for
-> string tables, game modes, voice packets, and recordings without final metadata.
+> string tables, game modes, voice packets, recordings without final metadata, and
+> the fixed-width player fields added by the 11.11.2026 CS2 update.
 > Exact newest-patch compatibility still needs a fresh demo recorded on that patch;
 > a recent download date alone does not establish compatibility.
 
@@ -64,7 +65,7 @@ not release-tested.
 
 ## 📥 Installation
 
-1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.0.1/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
+1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.0.2/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
 2. Extract the ZIP to a folder and run **`SmallDemoManager.exe`**.
 3. Add your demo folder, then open **Settings** to configure the CS2 destination.
 
@@ -122,12 +123,10 @@ CLI diagnostics, and the source layout.
 
 ## 📝 Patch Notes
 
-**31.10.2026 — 2.0.1**
+**14.11.2026 — 2.0.2**
 
-* Fixed startup and rescan stalls with large demo libraries.
-* Stopped importing the old library; parsing now starts only on click or drop.
-* Added everyone and selected-player voice tracks while keeping original clips.
-* Removed bundled documentation and screenshots from the Windows ZIP.
+* Fixed parsing of demos recorded after the 11.11.2026 CS2 update.
+* Demos parsed by earlier versions are read again when opened.
 
 Read the [full patch notes and previous dated updates](PATCHNOTES.md).
 

@@ -1,5 +1,11 @@
 # Patch Notes
 
+## 14.11.2026 — 2.0.2
+
+### [ DEMOS ]
+- Fixed parsing of demos recorded after the 11.11.2026 CS2 update. Kill-queue and rank fields on players were read in the wrong format, which could corrupt match data or stop parsing.
+- Demos parsed by earlier versions are read again when opened, so their match data reflects this fix.
+
 ## 31.10.2026 — 2.0.1
 
 ### [ GENERAL ]

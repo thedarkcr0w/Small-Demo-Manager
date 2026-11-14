@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub const PARSER_VERSION: &str = "source2-demo-0.5.10/sdm-4";
+pub const PARSER_VERSION: &str = "source2-demo-0.5.10/sdm-5";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]

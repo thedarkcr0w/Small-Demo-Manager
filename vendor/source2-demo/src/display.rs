@@ -216,6 +216,14 @@ impl Display for FieldDecoder {
             FieldDecoder::Float32(_) => "f32",
             FieldDecoder::QuantizedFloat(_) => "f32",
             FieldDecoder::QAngle(_) => "[f32; 3]",
+            FieldDecoder::FixedInt(decoder) => match decoder.kind {
+                FixedIntKind::Signed8 => "i8",
+                FixedIntKind::Signed16 => "i16",
+                FixedIntKind::Signed32 => "i32",
+                FixedIntKind::Unsigned8 => "u8",
+                FixedIntKind::Unsigned16 => "u16",
+                FixedIntKind::Unsigned32 => "u32",
+            },
             FieldDecoder::CCSGameModeRules => "bool",
         };
         write!(f, "{output}")
