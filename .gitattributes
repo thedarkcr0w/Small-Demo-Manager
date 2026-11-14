@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# License texts bundled into the release ZIP are not project source;
+# keep them out of GitHub's language statistics.
+LICENSES/** linguist-documentation
