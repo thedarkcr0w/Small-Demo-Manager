@@ -99,8 +99,8 @@ previous files; your demos, annotations, and saved audio are not replaced.
 
 Keep the app in a folder you can write to. Updates become available after a
 compatible ZIP and checksum are published on GitHub; older .NET releases are not
-compatible. See [the updater guide](docs/UPDATING.md) for release requirements,
-verification, and backup locations.
+compatible. Update downloads, logs, and backups of replaced files are kept under
+`%LocalAppData%\Small-Demo-Manager\Updates\`.
 
 The Windows executable is unsigned. If Windows shows a publisher warning, check
 that the download came from this repository and verify the supplied `.sha256`.
@@ -116,8 +116,7 @@ cargo run --locked
 ```
 
 Packaging writes the native ZIP and a `.sha256` sidecar to `dist/`; it does not
-publish anything. See [BUILDING.md](docs/BUILDING.md) for tests, GNU toolchain setup,
-CLI diagnostics, and the source layout.
+publish anything.
 
 ---
 
