@@ -1,6 +1,6 @@
 # Patch Notes
 
-## Unreleased
+## 19.11.2026 — 2.1.0
 
 ### [ GENERAL ]
 - New look: a warm, light keycap design shared with XMouse, replacing the dark/amber theme. Buttons, switches and lists respond with smooth hover and press feedback.

@@ -65,7 +65,7 @@ not release-tested.
 
 ## 📥 Installation
 
-1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.0.2/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
+1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.1.0/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
 2. Extract the ZIP to a folder and run **`SmallDemoManager.exe`**.
 3. Add your demo folder, then open **Settings** to configure the CS2 destination.
 
@@ -122,10 +122,11 @@ publish anything.
 
 ## 📝 Patch Notes
 
-**14.11.2026 — 2.0.2**
+**19.11.2026 — 2.1.0**
 
-* Fixed parsing of demos recorded after the 11.11.2026 CS2 update.
-* Demos parsed by earlier versions are read again when opened.
+* New look: a warm, light keycap design with new embedded fonts, shared with XMouse.
+* Fixed missing map artwork for Ancient, Anubis, Dust II, Mirage, Nuke and Overpass.
+* The match view adapts to narrow windows; messages stay until dismissed.
 
 Read the [full patch notes and previous dated updates](PATCHNOTES.md).
 
