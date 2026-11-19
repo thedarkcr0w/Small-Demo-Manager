@@ -9,6 +9,13 @@ pub(crate) struct RawDemoMessage {
     pub(crate) tick: u32,
     pub(crate) raw_payload: Vec<u8>,
     pub(crate) compressed: bool,
+    /// Byte offset of this command in the input demo.
+    pub(crate) input_offset: u64,
+}
+
+/// Length of the canonical varint encoding the demo format uses for `value`.
+fn var_u32_len(value: u32) -> u64 {
+    u64::from((32 - value.leading_zeros()).max(1).div_ceil(7))
 }
 
 impl<'a, R, W> DemoWriter<'a, R, W>
@@ -22,9 +29,13 @@ where
             return Ok(None);
         }
 
-        let cmd = self.parser.reader.read_var_u32() as i32;
+        let input_offset = self.input_offset;
+        let cmd = self.parser.reader.read_var_u32();
         let tick = self.parser.reader.read_var_u32();
         let size = self.parser.reader.read_var_u32();
+        self.input_offset +=
+            var_u32_len(cmd) + var_u32_len(tick) + var_u32_len(size) + u64::from(size);
+        let cmd = cmd as i32;
         let compressed = cmd & EDemoCommands::DemIsCompressed as i32 != 0;
         let msg_type = EDemoCommands::try_from(cmd & !(EDemoCommands::DemIsCompressed as i32))?;
         let raw_payload = self.parser.reader.read_bytes(size);
@@ -34,6 +45,7 @@ where
             tick,
             raw_payload,
             compressed,
+            input_offset,
         }))
     }
 

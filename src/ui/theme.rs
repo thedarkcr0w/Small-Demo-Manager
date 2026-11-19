@@ -1130,6 +1130,34 @@ pub fn check(ui: &mut Ui, on: &mut bool) -> Response {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Width [`badge`] will take for `label`, so a neighbouring label can leave room for it.
+pub fn badge_width(ui: &Ui, label: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(label.to_uppercase(), mono(10.0), SIGNAL_TEXT)
+        .size()
+        .x
+        + 12.0
+}
+
+/// A small red status tag (e.g. "MUTED"), sized to sit beside a bold name.
+pub fn badge(ui: &mut Ui, label: &str) -> Response {
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_uppercase(), mono(10.0), SIGNAL_TEXT);
+    let size = vec2(galley.size().x + 12.0, galley.size().y + 6.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
+    let p = ui.painter();
+    p.rect(
+        rect,
+        CornerRadius::same(radius::TINY),
+        mix(KEY, SIGNAL, 0.12),
+        Stroke::new(1.0, mix(EDGE, SIGNAL, 0.55)),
+        StrokeKind::Inside,
+    );
+    p.galley(rect.center() - galley.size() / 2.0, galley, SIGNAL_TEXT);
+    resp
+}
+
 /// A keycap chip; `on` chips are inked. With `closable` it shows a × after the label.
 pub fn chip(ui: &mut Ui, label: &str, on: bool, closable: bool) -> Response {
     let galley = ui

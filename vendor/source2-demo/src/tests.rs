@@ -1401,3 +1401,56 @@ fn writer_macro_typed_packet_callback_can_receive_msg_type() {
 
     assert_eq!(rewriter.typed_msg_type, NetMessages::NetTick as i32);
 }
+
+#[test]
+fn demo_writer_repoints_spawn_groups_header_offset_after_resizing_packets() {
+    let mut replay = replay_with_playback_ticks(
+        20,
+        &[
+            (EDemoCommands::DemSyncTick, 0, sync_payload()),
+            (
+                EDemoCommands::DemPacket,
+                5,
+                demo_packet_payload(&[(7, &[1, 2, 3]), (8, &[4, 5]), (9, &[6])]),
+            ),
+            (EDemoCommands::DemStop, 10, Vec::new()),
+        ],
+    );
+    let spawn_groups = replay.len() as u32;
+    write_demo_message(&mut replay, EDemoCommands::DemSpawnGroups, 10, &[1, 2, 3]).unwrap();
+    replay[12..16].copy_from_slice(&spawn_groups.to_le_bytes());
+
+    let offset_and_command = |bytes: &[u8]| {
+        let offset = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let mut reader = SliceReader::new(bytes);
+        reader.seek(offset);
+        let message = reader.read_next_message().unwrap().expect("message");
+        (offset, message.msg_type, message.buf)
+    };
+
+    // Each writer owns a parser with large inline buffers; keep them in
+    // separate frames so two do not share one debug-build test stack.
+    #[inline(never)]
+    fn rewrite(replay: &[u8], resize: bool) -> Vec<u8> {
+        let parser = Parser::from_slice(replay).unwrap();
+        let mut writer = DemoWriter::new(parser, Cursor::new(Vec::new()));
+        if resize {
+            writer.add_rewriter(ReplaceAndDropPacketMessages);
+        }
+        writer.run().unwrap();
+        writer.into_parts().1.into_inner()
+    }
+
+    // Unchanged streams keep the header byte for byte.
+    assert_eq!(rewrite(&replay, false), replay);
+
+    // The rewriter shrinks the packet, so the closing command moves.
+    let output = rewrite(&replay, true);
+
+    assert!(output.len() < replay.len());
+    let (offset, msg_type, payload) = offset_and_command(&output);
+    assert!(offset < spawn_groups as usize);
+    assert_eq!(msg_type, EDemoCommands::DemSpawnGroups);
+    assert_eq!(payload, [1, 2, 3]);
+    assert_eq!(&output[8..12], &replay[8..12]);
+}

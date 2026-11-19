@@ -8,6 +8,27 @@ fn team_color(index: usize) -> Color32 {
 /// Height of the title band (logo, version, window controls).
 const TITLE_BAR: f32 = 54.0;
 
+/// What the "Muted" badge means, for its tooltip and the player menu.
+const MUTED_HINT: &str = "Community muted: you won't hear this player when you watch the demo in CS2. The voice extractor still gets their voice.";
+
+/// A player's name in `font`, cut short to leave room for a "Muted" badge when the
+/// demo recorded a communication-abuse mute for them.
+fn player_name(ui: &mut Ui, player: &Player, font: FontId) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let room = if player.comm_muted {
+            badge_width(ui, "Muted") + 6.0
+        } else {
+            0.0
+        };
+        let name = one_line(ui, &player.name, font, INK, ui.available_width() - room);
+        ui.add(Label::new(name).selectable(false));
+        if player.comm_muted {
+            badge(ui, "Muted").on_hover_text(MUTED_HINT);
+        }
+    });
+}
+
 /// The full window width for edge-to-edge lines inside padded panels.
 fn full_width(ui: &Ui) -> egui::Rangef {
     ui.ctx().content_rect().x_range()
@@ -1363,14 +1384,7 @@ impl App {
                                     let response = ui
                                         .vertical(|ui| {
                                             ui.spacing_mut().item_spacing.y = 1.0;
-                                            ui.add(
-                                                Label::new(
-                                                    RichText::new(&player.name)
-                                                        .font(bold(14.5))
-                                                        .color(INK),
-                                                )
-                                                .truncate(),
-                                            );
+                                            player_name(ui, player, bold(14.5));
                                             let stats = format!(
                                                 "{}/{}/{} · {} ADR",
                                                 number(player.kills),
@@ -1435,7 +1449,11 @@ impl App {
     }
 
     fn player_menu(&mut self, ui: &mut Ui, player: &Player) {
-        ui.label(RichText::new(&player.name).font(bold(14.5)).color(INK));
+        player_name(ui, player, bold(14.5));
+        if player.comm_muted {
+            ui.set_max_width(260.0);
+            hint(ui, MUTED_HINT);
+        }
         let Some(steam) = &player.steam_id else {
             hint(ui, "SteamID64 not recorded. No profile is invented.");
             return;
@@ -1786,22 +1804,30 @@ impl App {
                     for player in players {
                         let key = player.key();
                         let selected = self.selected_speaker.as_ref() == Some(&key);
-                        if nav_item(
+                        let steam = player
+                            .steam_id
+                            .as_deref()
+                            .unwrap_or("SteamID64 not recorded");
+                        let sub = if player.comm_muted {
+                            format!("Muted · {steam}")
+                        } else {
+                            steam.to_owned()
+                        };
+                        let row = nav_item(
                             ui,
                             ("speaker", &key),
                             None,
                             &player.name,
-                            Some(
-                                player
-                                    .steam_id
-                                    .as_deref()
-                                    .unwrap_or("SteamID64 not recorded"),
-                            ),
+                            Some(&sub),
                             None,
                             selected,
-                        )
-                        .clicked()
-                        {
+                        );
+                        let row = if player.comm_muted {
+                            row.on_hover_text(MUTED_HINT)
+                        } else {
+                            row
+                        };
+                        if row.clicked() {
                             self.selected_speaker = Some(key);
                             let track = player
                                 .steam_id

@@ -24,6 +24,17 @@ licenses. Local patches are tracked here rather than modifying a Cargo cache:
   `m_recentKillQueue` (`uint8[8]`) and `m_iCompetitiveRankType` this way, and a
   varint read of values >= 128 desynced the entity stream. Matches
   demoinfocs-golang v5.3.0 (#764 / #765).
+* Demo writer: after rewriting, header bytes 12..16 are repointed at the
+  closing `DemSpawnGroups` command, as bytes 8..12 already were for
+  `DemFileInfo`. Upstream copied the input value, which goes stale as soon as
+  any earlier payload changes size. An unchanged stream is still reproduced
+  byte for byte.
+* Demo writer: entity fields are decoded with the polymorphic game-mode
+  selector (see above) instead of always the base serializer. Entities the
+  rewriter neither tracks nor rewrites keep their baseline state and recorded
+  selectors so their nested fields are skipped with the right serializer.
+  Replacement values are still encoded with the base serializer, so do not
+  rewrite fields nested under `m_pGameModeRules`.
 
 Application-side compatibility handling additionally derives round results
 only from observed, stable-roster score increments when modern demos omit

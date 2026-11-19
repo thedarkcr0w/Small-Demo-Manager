@@ -110,7 +110,10 @@ where
         let mut decoded_fields = Vec::with_capacity(paths.len());
         for fp in paths {
             let name = entity.class.serializer.get_name(&fp);
-            let decoder = entity.class.serializer.get_decoder(&fp);
+            let decoder = entity
+                .class
+                .serializer
+                .get_decoder_with_state(&fp, Some(&entity.state));
             let value_start = bit_position(&reader);
             let value = decoder.decode(&mut reader);
             let value_end = bit_position(&reader);

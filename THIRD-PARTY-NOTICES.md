@@ -45,6 +45,8 @@ dependencies resolved in `Cargo.lock`):
   https://github.com/googlefonts/unbounded
 * JetBrains Mono (Medium) — SIL Open Font License 1.1
   https://github.com/JetBrains/JetBrainsMono
+* OdyCSUnmuter demo rewrite rules, ported into `src/unmute.rs` — MIT, Copyright (c) 2026 Ody
+  https://github.com/OdyCS/OdyCSUnmuter (notice: `LICENSES/ported/OdyCSUnmuter-MIT.txt`)
 * Rust standard library and compiler-builtins — compiler/runtime notices below in the release bundle
 * GCC runtime — GPL-3.0 with the GCC Runtime Library Exception
 * MinGW-w64 runtime and winpthreads — their bundled notices apply

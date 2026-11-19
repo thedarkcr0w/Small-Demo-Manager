@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub const PARSER_VERSION: &str = "source2-demo-0.5.10/sdm-5";
+pub const PARSER_VERSION: &str = "source2-demo-0.5.10/sdm-6";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -139,6 +139,15 @@ pub struct Player {
     pub headshot_kills: Option<u32>,
     pub score: Option<u32>,
     pub bot: bool,
+    /// Recorded global communication-abuse mute: `m_bHasCommunicationAbuseMute`
+    /// was true or `m_uiCommunicationMuteFlags` was non-zero on the player's
+    /// controller at any point in the match. CS2 playback silences such players.
+    #[serde(default)]
+    pub comm_muted: bool,
+    /// Last non-zero `m_uiCommunicationMuteFlags` value recorded for the player.
+    /// Kept raw: the engine does not document the individual bits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comm_mute_flags: Option<u32>,
 }
 
 impl Player {
@@ -258,6 +267,32 @@ mod tests {
             }
             .adr(Some(12)),
             Some(100.0)
+        );
+    }
+
+    #[test]
+    fn players_saved_before_mute_tracking_load_as_not_muted() {
+        let saved = r#"{"name":"Player","steam_id":"76561198000000001","entity_index":3,
+            "team":0,"kills":1,"deaths":2,"assists":3,"damage":400,"headshot_kills":1,
+            "score":5,"bot":false}"#;
+        let player: Player = serde_json::from_str(saved).expect("sdm-5 player");
+        assert_eq!(player.name, "Player");
+        assert!(!player.comm_muted);
+        assert_eq!(player.comm_mute_flags, None);
+
+        let muted = Player {
+            comm_muted: true,
+            comm_mute_flags: Some(2),
+            ..player
+        };
+        let json = serde_json::to_string(&muted).expect("json");
+        let loaded: Player = serde_json::from_str(&json).expect("round trip");
+        assert!(loaded.comm_muted);
+        assert_eq!(loaded.comm_mute_flags, Some(2));
+        assert!(
+            !serde_json::to_string(&Player::default())
+                .expect("json")
+                .contains("comm_mute_flags")
         );
     }
 

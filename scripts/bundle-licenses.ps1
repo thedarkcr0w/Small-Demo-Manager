@@ -39,6 +39,13 @@ if (-not $fontNotices.Count) { throw 'Missing embedded font license (LICENSES/fo
 foreach ($file in $fontNotices) {
     Add-Notice -Label ('fonts/' + $file.Name) -File $file.FullName
 }
+# Code ported from other projects into src/ (not crates, so not in the dependency index).
+$ported = Join-Path $licenseRoot 'ported'
+$portedNotices = @(Get-ChildItem -LiteralPath $ported -File | Sort-Object FullName)
+if (-not $portedNotices.Count) { throw 'Missing ported-code license notices (LICENSES/ported)' }
+foreach ($file in $portedNotices) {
+    Add-Notice -Label ('ported/' + $file.Name) -File $file.FullName
+}
 
 New-Item -ItemType Directory -Path (Join-Path $Destination 'LICENSES/dependencies') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $project 'LICENSE') -Destination (Join-Path $Destination 'LICENSE')

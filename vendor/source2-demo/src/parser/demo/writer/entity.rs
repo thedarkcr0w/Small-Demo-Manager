@@ -1,4 +1,4 @@
-use crate::entity::field::{Decode, Encode, FieldPath, FieldState, Serializer, Skip};
+use crate::entity::field::{Decode, Encode, FieldDecoder, FieldPath, FieldState, Serializer, Skip};
 use crate::entity::{Entity, EntityEvents};
 use crate::error::ParserError;
 use crate::parser::demo::writer::{DecodedEntityField, DemoWriter, FieldReplacement};
@@ -134,10 +134,7 @@ where
                 rewrite,
             )?;
         } else {
-            self.skip_original_fields(reader, path_reader, &entity);
-        }
-        if !track {
-            entity.state = FieldState::default();
+            self.skip_original_fields(reader, path_reader, &mut entity);
         }
         self.parser.context.entities.entities_vec[index] = entity;
 
@@ -175,10 +172,7 @@ where
                 rewrite,
             )?;
         } else {
-            self.skip_original_fields(reader, path_reader, &entity);
-        }
-        if !track {
-            entity.state = FieldState::default();
+            self.skip_original_fields(reader, path_reader, &mut entity);
         }
         self.parser.context.entities.entities_vec[index] = entity;
 
@@ -189,7 +183,7 @@ where
         &mut self,
         reader: &mut SliceReader<'_>,
         path_reader: &FieldPathCodec,
-        entity: &Entity,
+        entity: &mut Entity,
     ) {
         self.entity_rewrite.rewrite_paths.clear();
         let mut fp = FieldPath::default();
@@ -204,8 +198,20 @@ where
             self.entity_rewrite.rewrite_paths.push(fp);
         }
 
+        // Untracked entities keep only their baseline plus polymorphic
+        // selectors: nested fields behind a selector can only be skipped with
+        // the serializer the selector names.
         for fp in &self.entity_rewrite.rewrite_paths {
-            entity.class.serializer.get_decoder(fp).skip(reader);
+            let decoder = entity
+                .class
+                .serializer
+                .get_decoder_with_state(fp, Some(&entity.state));
+            if matches!(decoder, FieldDecoder::CCSGameModeRules) {
+                let value = decoder.decode(reader);
+                entity.state.set(fp, value);
+            } else {
+                decoder.skip(reader);
+            }
         }
     }
 
@@ -233,7 +239,10 @@ where
 
         if !rewrite {
             for fp in self.entity_rewrite.rewrite_paths.iter() {
-                let decoder = entity.class.serializer.get_decoder(fp);
+                let decoder = entity
+                    .class
+                    .serializer
+                    .get_decoder_with_state(fp, Some(&entity.state));
                 let value = decoder.decode(reader);
                 entity.state.set(fp, value);
             }
@@ -244,7 +253,11 @@ where
             let mut paths = std::mem::take(&mut self.entity_rewrite.rewrite_paths);
             for fp in paths.iter().copied() {
                 let name = entity.class.serializer.get_name(&fp);
-                let decoder = entity.class.serializer.get_decoder(&fp);
+                let decoder = entity
+                    .class
+                    .serializer
+                    .get_decoder_with_state(&fp, Some(&entity.state));
+                let is_selector = matches!(decoder, FieldDecoder::CCSGameModeRules);
                 let value_start = bit_position(reader);
                 let value = decoder.decode(reader);
                 let value_end = bit_position(reader);
@@ -258,6 +271,8 @@ where
                         value_start,
                         value_end,
                     });
+                } else if is_selector {
+                    entity.state.set(&fp, value);
                 }
             }
             paths.clear();
@@ -269,7 +284,10 @@ where
         let mut paths = std::mem::take(&mut self.entity_rewrite.rewrite_paths);
         for fp in paths.iter().copied() {
             let name = entity.class.serializer.get_name(&fp);
-            let decoder = entity.class.serializer.get_decoder(&fp);
+            let decoder = entity
+                .class
+                .serializer
+                .get_decoder_with_state(&fp, Some(&entity.state));
             let value_start = bit_position(reader);
             let value = decoder.decode(reader);
             let value_end = bit_position(reader);

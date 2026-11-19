@@ -20,6 +20,15 @@ where
         let header = self.parser.reader.read_bytes(16);
         self.writer.write_all(&header)?;
         self.bytes_written = header.len() as u64;
+        self.input_offset = header.len() as u64;
+        // Header bytes 12..16 point at the closing spawn-group command. That
+        // command moves whenever an earlier payload changes size.
+        self.spawn_groups_input_offset = header
+            .get(12..16)
+            .and_then(|bytes| <[u8; 4]>::try_from(bytes).ok())
+            .map(|bytes| u64::from(u32::from_le_bytes(bytes)))
+            .filter(|offset| *offset != 0);
+        self.spawn_groups_offset = None;
 
         while let Some(message) = self.read_next_raw_message()? {
             self.update_context_tick(message.tick);
@@ -29,15 +38,19 @@ where
                 DemoMessageRewrite::Drop => continue,
             };
 
+            let output_offset = self.bytes_written;
             if matches!(
                 self.write_demo_command(&message, payload)?,
                 DemoCommandWrite::Dropped
             ) {
                 continue;
             }
+            if self.spawn_groups_input_offset == Some(message.input_offset) {
+                self.spawn_groups_offset = Some(output_offset);
+            }
         }
 
-        self.finalize_file_info_offset()?;
+        self.finalize_header_offsets()?;
         Ok(())
     }
 

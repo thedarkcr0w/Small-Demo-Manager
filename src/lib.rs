@@ -7,5 +7,6 @@ pub mod model;
 pub mod parser;
 pub mod steam;
 pub mod store;
+pub mod unmute;
 pub mod updates;
 pub mod worker;

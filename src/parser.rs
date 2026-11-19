@@ -201,6 +201,17 @@ fn steam_id(entity: &Entity) -> Option<String> {
     }
 }
 
+/// A communication mute is a property of the match, not of one snapshot: once
+/// either controller field reports it, the player stays marked. The raw flags
+/// keep their last non-zero value.
+fn comm_mute(old: &Player, abuse_mute: Option<bool>, flags: Option<u32>) -> (bool, Option<u32>) {
+    let flags = flags.filter(|flags| *flags != 0);
+    (
+        old.comm_muted || abuse_mute.unwrap_or(false) || flags.is_some(),
+        flags.or(old.comm_mute_flags),
+    )
+}
+
 fn event_int(event: &GameEvent<'_>, name: &str) -> Option<i32> {
     match event.get_value(name).ok()? {
         EventValue::Int(v) => Some(*v),
@@ -278,6 +289,11 @@ impl MatchObserver {
                     &format!("m_pActionTrackingServices.m_matchStats.{suffix}"),
                 )
             };
+            let (comm_muted, comm_mute_flags) = comm_mute(
+                &old,
+                flag(entity, "m_bHasCommunicationAbuseMute"),
+                uint(entity, "m_uiCommunicationMuteFlags"),
+            );
             let player = Player {
                 name,
                 steam_id: steam,
@@ -291,6 +307,8 @@ impl MatchObserver {
                 score: uint(entity, "m_iScore").or(old.score),
                 bot: flag(entity, "m_bIsHLTV").unwrap_or(false)
                     || (old.bot && old.steam_id.is_none()),
+                comm_muted,
+                comm_mute_flags,
             };
             if player.team.is_some() {
                 self.players.insert(key, player);
@@ -650,6 +668,25 @@ mod tests {
                 .any(|w| w.contains("No final metadata"))
         );
         assert_eq!(files::hash_file(&path).expect("hash"), before);
+    }
+
+    #[test]
+    fn communication_mutes_are_sticky_across_snapshots() {
+        let clean = Player::default();
+        assert_eq!(comm_mute(&clean, None, None), (false, None));
+        assert_eq!(comm_mute(&clean, Some(false), Some(0)), (false, None));
+        assert_eq!(comm_mute(&clean, Some(true), Some(0)), (true, None));
+        assert_eq!(comm_mute(&clean, Some(false), Some(4)), (true, Some(4)));
+
+        let muted = Player {
+            comm_muted: true,
+            comm_mute_flags: Some(4),
+            ..Default::default()
+        };
+        // A later snapshot without the mute (or without the fields) keeps it.
+        assert_eq!(comm_mute(&muted, Some(false), Some(0)), (true, Some(4)));
+        assert_eq!(comm_mute(&muted, None, None), (true, Some(4)));
+        assert_eq!(comm_mute(&muted, Some(true), Some(6)), (true, Some(6)));
     }
 
     #[test]

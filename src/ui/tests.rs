@@ -535,3 +535,59 @@ fn voice_view_renders_everyone_and_selected_player_as_separate_tracks() {
         "rendering voice controls must not start a parse"
     );
 }
+
+#[test]
+fn a_recorded_communication_mute_is_badged_in_the_team_card() {
+    let mut h = harness();
+    let player = |name: &str, steam: &str, muted: bool| Player {
+        name: name.into(),
+        steam_id: Some(steam.into()),
+        team: Some(0),
+        comm_muted: muted,
+        ..Default::default()
+    };
+    let demo = Demo {
+        id: "fixture".into(),
+        path: PathBuf::from("fixture.dem"),
+        available: true,
+        parsed: Some(MatchData {
+            players: vec![
+                player("Loud player", "76561198000000001", false),
+                player("Muted player", "76561198000000002", true),
+            ],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    h.app.selected = Some(demo.id.clone());
+    h.app
+        .store
+        .as_mut()
+        .expect("store")
+        .library
+        .demos
+        .insert(demo.id.clone(), demo);
+    let ctx = Context::default();
+    theme::install(&ctx);
+    let mut clock = 0.0;
+    let mut output = None;
+    for _ in 0..2 {
+        output = Some(frame(&ctx, &mut clock, vec![], &mut |ui| h.app.details(ui)));
+    }
+    let texts: Vec<String> = output
+        .expect("frames ran")
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::epaint::Shape::Text(text) => Some(text.galley.job.text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(texts.iter().any(|t| t == "Muted player"));
+    assert!(texts.iter().any(|t| t == "Loud player"));
+    assert_eq!(
+        texts.iter().filter(|t| *t == "MUTED").count(),
+        1,
+        "only the muted player carries the badge: {texts:?}"
+    );
+}

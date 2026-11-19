@@ -6,7 +6,7 @@
 mod ui;
 
 use anyhow::{Context, Result};
-use small_demo_manager::{audio::AudioWriter, parser, updates};
+use small_demo_manager::{audio::AudioWriter, parser, unmute, updates};
 use std::{
     path::PathBuf,
     sync::{Arc, atomic::AtomicBool},
@@ -48,8 +48,20 @@ fn cli(args: &[std::ffi::OsString]) -> Result<()> {
                 );
             }
         }
+        "unmute" => {
+            const USAGE: &str = "Usage: SmallDemoManager unmute <input.dem> <output.dem>";
+            let input = PathBuf::from(args.get(1).context(USAGE)?);
+            let output = PathBuf::from(args.get(2).context(USAGE)?);
+            let report = unmute::unmute(
+                &input,
+                &output,
+                Arc::new(AtomicBool::new(false)),
+                Arc::new(|_| {}),
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "--help" | "-h" => println!(
-            "SmallDemoManager [demo.dem]\nSmallDemoManager inspect <demo.dem>\nSmallDemoManager extract <demo.dem> <output-directory>\nSDM_DATA_DIR overrides the native library directory for isolated testing."
+            "SmallDemoManager [demo.dem]\nSmallDemoManager inspect <demo.dem>\nSmallDemoManager extract <demo.dem> <output-directory>\nSmallDemoManager unmute <input.dem> <output.dem>\nSDM_DATA_DIR overrides the native library directory for isolated testing."
         ),
         _ => anyhow::bail!("Unknown command: {command}"),
     }
@@ -63,11 +75,20 @@ fn main() -> Result<()> {
             args.get(1).context("Missing update plan")?,
         ));
     }
-    if args
-        .first()
-        .is_some_and(|a| matches!(a.to_str(), Some("inspect" | "extract" | "--help" | "-h")))
-    {
-        return cli(&args);
+    if args.first().is_some_and(|a| {
+        matches!(
+            a.to_str(),
+            Some("inspect" | "extract" | "unmute" | "--help" | "-h")
+        )
+    }) {
+        // Decoding needs more stack than Windows gives the main thread (1 MiB).
+        return std::thread::Builder::new()
+            .name("sdm-cli".into())
+            .stack_size(small_demo_manager::worker::DECODER_STACK_BYTES)
+            .spawn(move || cli(&args))
+            .context("Could not start the command thread")?
+            .join()
+            .map_err(|_| anyhow::anyhow!("The command stopped unexpectedly"))?;
     }
     let restart = if args.first().is_some_and(|a| a == "--update-restart") {
         Some(updates::installer::restart_context(&PathBuf::from(

@@ -1,5 +1,12 @@
 # Patch Notes
 
+## Unreleased
+
+### [ DEMOS ]
+- Community-muted players, whom you can't hear when you watch the demo in CS2, are marked "Muted" in the team cards, the player menu and the voice extractor. Their voice is still extracted as usual.
+- Demos are read again once when opened, so these marks appear for demos you have already opened.
+- Demo decoding has much more stack headroom, so unusually deep demos no longer risk crashing the app.
+
 ## 19.11.2026 — 2.1.0
 
 ### [ GENERAL ]

@@ -75,15 +75,17 @@ where
         }
     }
 
-    pub(crate) fn finalize_file_info_offset(&mut self) -> Result<(), ParserError> {
-        let Some(offset) = self.file_info_offset else {
-            return Ok(());
-        };
-        let offset: u32 = offset
-            .try_into()
-            .map_err(|_| ParserError::ReplayEncodingError)?;
-        self.writer.seek(SeekFrom::Start(8))?;
-        self.writer.write_all(&offset.to_le_bytes())?;
+    pub(crate) fn finalize_header_offsets(&mut self) -> Result<(), ParserError> {
+        for (position, offset) in [(8, self.file_info_offset), (12, self.spawn_groups_offset)] {
+            let Some(offset) = offset else {
+                continue;
+            };
+            let offset: u32 = offset
+                .try_into()
+                .map_err(|_| ParserError::ReplayEncodingError)?;
+            self.writer.seek(SeekFrom::Start(position))?;
+            self.writer.write_all(&offset.to_le_bytes())?;
+        }
         self.writer.seek(SeekFrom::End(0))?;
         Ok(())
     }
