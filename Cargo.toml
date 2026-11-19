@@ -19,7 +19,7 @@ directories = "6"
 eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "clipboard", "links", "x11", "wayland"] }
 egui_extras = { version = "0.37", features = ["image"] }
 hound = "3.5"
-image = { version = "0.25", default-features = false, features = ["png", "ico"] }
+image = { version = "0.25", default-features = false, features = ["png", "ico", "jpeg", "webp"] }
 notify = "8"
 open = "5"
 opus = "0.4"

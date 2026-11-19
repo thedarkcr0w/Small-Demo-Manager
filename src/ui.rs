@@ -758,25 +758,59 @@ impl eframe::App for App {
         }
         self.chrome(ui);
         self.status(ui);
+        let page = Frame::new().fill(PAGE).inner_margin(Margin::same(28));
         if self.updater.installing {
-            CentralPanel::default().frame(card()).show(ui, |ui| {
-                ui.heading("Installing update");
-                ui.spinner();
-                ui.label(&self.updater.message);
-                small(ui, "Your library has been saved. The update helper will wait for this app to close, keep a backup, and restart it.");
+            CentralPanel::default().frame(page).show(ui, |ui| {
+                ui.add_space((ui.available_height() * 0.2).clamp(20.0, 140.0));
+                ui.vertical_centered(|ui| {
+                    ui.set_max_width(520.0);
+                    ui.label(RichText::new("Installing update").font(display(28.0)).color(INK));
+                    ui.add_space(space::M);
+                    ui.horizontal(|ui| {
+                        spinner(ui);
+                        ui.label(RichText::new(&self.updater.message).font(medium(14.5)).color(INK));
+                    });
+                    ui.add_space(space::S);
+                    hint(ui, "Your library has been saved. The update helper will wait for this app to close, keep a backup, and restart it.");
+                });
             });
+            // A drop refused during the install, or a failed hand-off, must still be seen.
+            self.notice_card(&ctx);
             ctx.request_repaint_after(Duration::from_millis(60));
             return;
         }
         if self.store.is_none() {
-            CentralPanel::default().frame(card()).show(ui, |ui| {
-                ui.heading("Library unavailable — your data was kept intact");
-                ui.label("Close any other native instance. If Library.native.json is corrupt, make a backup before repairing it. Restart after resolving the error shown below.");
-                if let Some((message, _)) = &self.notice { ui.colored_label(RED, message); }
-                if ui.button("Open application data folder").clicked()
-                    && let Ok(path) = store::data_dir()
-                    && let Err(e) = open::that(path) { self.error(e); }
-                if ui.button("Close").clicked() { ctx.send_viewport_cmd(ViewportCommand::Close); }
+            CentralPanel::default().frame(page).show(ui, |ui| {
+                ui.add_space((ui.available_height() * 0.15).clamp(20.0, 120.0));
+                ui.vertical_centered(|ui| {
+                    ui.set_max_width(560.0);
+                    ui.label(RichText::new("Library unavailable").font(display(28.0)).color(INK));
+                    ui.add_space(2.0);
+                    ui.label(RichText::new("Your data was kept intact.").font(body(15.0)).color(MUTED));
+                });
+                ui.add_space(space::L);
+                ui.vertical_centered(|ui| {
+                    ui.set_max_width(560.0);
+                    group(ui, |ui| {
+                        ui.label(RichText::new("Close any other native instance. If Library.native.json is corrupt, make a backup before repairing it. Restart after resolving the error shown below.").font(body(14.5)).color(INK));
+                        if let Some((message, _)) = &self.notice {
+                            ui.add_space(space::S);
+                            error_text(ui, message);
+                        }
+                        ui.add_space(space::M);
+                        ui.horizontal(|ui| {
+                            if button(ui, "Open application data folder", Tone::Primary, true).clicked()
+                                && let Ok(path) = store::data_dir()
+                                && let Err(e) = open::that(path)
+                            {
+                                self.error(e);
+                            }
+                            if button(ui, "Close", Tone::Secondary, true).clicked() {
+                                ctx.send_viewport_cmd(ViewportCommand::Close);
+                            }
+                        });
+                    });
+                });
             });
             return;
         }
@@ -792,39 +826,70 @@ impl eframe::App for App {
             match layout {
                 LibraryLayout::Hybrid => {
                     egui::Panel::left("demo_list")
-                        .default_size(300.0)
-                        .min_size(230.0)
-                        .max_size(500.0)
-                        .frame(Frame::new().fill(BG).inner_margin(0))
+                        .default_size(330.0)
+                        .min_size(240.0)
+                        .max_size(520.0)
+                        .frame(Frame::new().fill(KEY).inner_margin(0))
                         .show(ui, |ui| self.library(ui, false));
                 }
                 LibraryLayout::Table | LibraryLayout::Cards => {
                     egui::Panel::top("library_above")
-                        .default_size(250.0)
-                        .min_size(120.0)
-                        .max_size(450.0)
+                        .default_size(270.0)
+                        .min_size(130.0)
+                        .max_size(470.0)
                         .resizable(true)
-                        .frame(Frame::new().fill(BG).inner_margin(8))
+                        .frame(
+                            Frame::new()
+                                .fill(if layout == LibraryLayout::Cards {
+                                    PAGE
+                                } else {
+                                    KEY
+                                })
+                                .inner_margin(0),
+                        )
                         .show(ui, |ui| self.library(ui, layout == LibraryLayout::Cards));
                 }
             }
         }
         egui::CentralPanel::default()
-            .frame(Frame::new().fill(SURFACE).inner_margin(18))
+            .frame(Frame::new().fill(PAGE).inner_margin(Margin {
+                left: 24,
+                right: 24,
+                top: 20,
+                bottom: 0,
+            }))
             .show(ui, |ui| self.details(ui));
         self.dialogs(&ctx);
+        self.notice_card(&ctx);
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let painter =
                 ctx.layer_painter(LayerId::new(Order::Foreground, Id::unique("drop_hint")));
-            let rect = ctx.viewport_rect().shrink(20.0);
-            painter.rect_filled(rect, 10, Color32::from_black_alpha(225));
-            painter.rect_stroke(rect, 10, Stroke::new(2.0, ACCENT), StrokeKind::Inside);
+            let screen = ctx.content_rect();
+            painter.rect_filled(
+                screen,
+                0,
+                Color32::from_rgba_unmultiplied(0xF7, 0xF4, 0xEE, 225),
+            );
+            let rect = screen.shrink(24.0);
+            painter.rect_stroke(
+                rect,
+                radius::CARD + 4,
+                Stroke::new(2.5, SIGNAL),
+                StrokeKind::Inside,
+            );
             painter.text(
-                rect.center(),
+                rect.center() - vec2(0.0, 16.0),
                 Align2::CENTER_CENTER,
-                "Drop .dem files or ZIP archives to import\nOriginal files are kept",
-                FontId::proportional(22.0),
-                TEXT,
+                "Drop to import",
+                display(30.0),
+                INK,
+            );
+            painter.text(
+                rect.center() + vec2(0.0, 22.0),
+                Align2::CENTER_CENTER,
+                ".dem files or ZIP archives · original files are kept",
+                body(16.0),
+                MUTED,
             );
         }
         self.schedule();

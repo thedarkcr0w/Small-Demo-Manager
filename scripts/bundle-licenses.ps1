@@ -32,6 +32,13 @@ foreach ($file in (Get-ChildItem -LiteralPath $toolchain -Recurse -File | Sort-O
     $relative = $file.FullName.Substring($toolchain.Length).TrimStart([char[]]@('\','/')).Replace('\','/')
     Add-Notice -Label ('toolchain/' + $relative) -File $file.FullName
 }
+# Fonts embedded from assets/fonts (SIL Open Font License 1.1).
+$fonts = Join-Path $licenseRoot 'fonts'
+$fontNotices = @(Get-ChildItem -LiteralPath $fonts -File | Sort-Object FullName)
+if (-not $fontNotices.Count) { throw 'Missing embedded font license (LICENSES/fonts)' }
+foreach ($file in $fontNotices) {
+    Add-Notice -Label ('fonts/' + $file.Name) -File $file.FullName
+}
 
 New-Item -ItemType Directory -Path (Join-Path $Destination 'LICENSES/dependencies') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $project 'LICENSE') -Destination (Join-Path $Destination 'LICENSE')

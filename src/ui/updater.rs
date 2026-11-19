@@ -187,39 +187,34 @@ impl App {
 
     fn update_actions(&mut self, ui: &mut Ui) {
         if let Some(task) = &self.updater.task {
-            ui.spinner();
+            spinner(ui);
             if let Some(progress) = self.updater.progress {
-                ui.add(
-                    ProgressBar::new(progress)
-                        .desired_width(130.0)
-                        .show_percentage(),
-                );
+                progress_bar(ui, progress, 130.0);
             }
             if task.cancel.load(Ordering::Relaxed) {
-                small(ui, "Cancelling…");
-            } else if !self.updater.installing && ui.button("Cancel").clicked() {
+                hint(ui, "Cancelling…");
+            } else if !self.updater.installing && small_link(ui, "Cancel").clicked() {
                 task.cancel.store(true, Ordering::Relaxed);
             }
         } else if self.updater.prepared.is_some() {
-            if ui
-                .add_enabled(
-                    self.active.is_none() && self.pending_imports.is_empty() && cfg!(windows),
-                    primary("Restart & install…"),
-                )
-                .clicked()
+            if button(
+                ui,
+                "Restart & install…",
+                Tone::Primary,
+                self.active.is_none() && self.pending_imports.is_empty() && cfg!(windows),
+            )
+            .clicked()
             {
                 self.dialog = Some(Dialog::InstallUpdate);
             }
             if self.active.is_some() {
-                small(
+                hint(
                     ui,
                     "Finish or cancel the current operation before restarting.",
                 );
             }
         } else if self.updater.available.as_ref().is_some_and(|u| u.newer)
-            && ui
-                .add_enabled(cfg!(windows), primary("Download update"))
-                .clicked()
+            && button(ui, "Download update", Tone::Primary, cfg!(windows)).clicked()
         {
             self.download_update(ui.ctx());
         }
@@ -230,18 +225,34 @@ impl App {
             return;
         }
         Panel::top("app_update_banner")
-            .frame(Frame::new().fill(SOFT).inner_margin(10))
+            .frame(
+                Frame::new()
+                    .fill(KEY)
+                    .inner_margin(Margin::symmetric(16, 8)),
+            )
             .show(ui, |ui| {
+                let r = ui.max_rect();
+                ui.painter().hline(
+                    r.x_range().expand(16.0),
+                    r.bottom() + 8.5,
+                    Stroke::new(1.0, EDGE),
+                );
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(
-                        RichText::new(&self.updater.message).color(if self.updater.error {
-                            RED
-                        } else {
-                            ACCENT
-                        }),
+                    let (dot, _) = ui.allocate_exact_size(vec2(12.0, 20.0), Sense::hover());
+                    ui.painter().circle_filled(
+                        dot.center(),
+                        4.5,
+                        if self.updater.error { SIGNAL } else { OK },
                     );
+                    ui.label(
+                        RichText::new(&self.updater.message)
+                            .font(medium(14.0))
+                            .color(if self.updater.error { SIGNAL_TEXT } else { INK }),
+                    );
+                    ui.add_space(space::S);
                     self.update_actions(ui);
-                    if ui.small_button("Later").clicked() {
+                    ui.add_space(space::S);
+                    if small_link(ui, "Later").clicked() {
                         self.updater.dismissed = true;
                     }
                 });
@@ -249,62 +260,79 @@ impl App {
     }
 
     pub(super) fn update_settings(&mut self, ui: &mut Ui) {
-        eyebrow(ui, "App updates");
-        small(
-            ui,
-            format!(
-                "Installed version {} · GitHub releases",
-                env!("CARGO_PKG_VERSION")
-            ),
-        );
-        ui.checkbox(
-            &mut self.settings_draft.check_for_updates,
-            "Automatically check for updates when the app starts",
-        );
-        small(
-            ui,
-            "Downloads are verified against the release SHA-256. Installation asks for a restart and keeps a rollback backup. Older .NET packages are excluded.",
-        );
-        if !self.updater.message.is_empty() {
-            ui.add(
-                Label::new(
-                    RichText::new(&self.updater.message)
-                        .size(11.0)
-                        .color(if self.updater.error { RED } else { SECONDARY }),
-                )
-                .wrap(),
+        section(ui, "App updates");
+        ui.add_space(4.0);
+        group_with(ui, Margin::ZERO, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            control_row(
+                ui,
+                true,
+                "Check for updates at startup",
+                &format!(
+                    "Installed version {} · GitHub releases. Downloads are verified against the release SHA-256; installing asks for a restart and keeps a rollback backup. Older .NET packages are excluded.",
+                    env!("CARGO_PKG_VERSION")
+                ),
+                |ui| {
+                    switch(ui, &mut self.settings_draft.check_for_updates);
+                },
             );
-        }
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(
-                    self.updater.task.is_none() && self.updater.prepared.is_none(),
-                    Button::new("Check for updates"),
-                )
-                .clicked()
-            {
-                self.check_updates(ui.ctx(), true);
-            }
-            self.update_actions(ui);
+            divider(ui);
+            Frame::new()
+                .inner_margin(Margin::symmetric(16, 12))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.spacing_mut().item_spacing.y = 6.0;
+                    if !self.updater.message.is_empty() {
+                        if self.updater.error {
+                            error_text(ui, &self.updater.message);
+                        } else {
+                            ui.add(
+                                Label::new(
+                                    RichText::new(&self.updater.message)
+                                        .font(medium(13.5))
+                                        .color(INK),
+                                )
+                                .wrap(),
+                            );
+                        }
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        if button(
+                            ui,
+                            "Check for updates",
+                            Tone::Secondary,
+                            self.updater.task.is_none() && self.updater.prepared.is_none(),
+                        )
+                        .clicked()
+                        {
+                            self.check_updates(ui.ctx(), true);
+                        }
+                        self.update_actions(ui);
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = space::L;
+                        if self.updater.prepared.is_some()
+                            && link_colored(ui, "Discard downloaded update", SIGNAL_TEXT).clicked()
+                        {
+                            self.updater.prepared = None;
+                            self.updater.message =
+                                "Downloaded update discarded. The installed app was not changed."
+                                    .into();
+                        }
+                        if let Some(update) = &self.updater.available
+                            && small_link(ui, &format!("Release notes · {}", update.version))
+                                .clicked()
+                            && let Err(error) = open::that(&update.url)
+                        {
+                            self.error(error);
+                        }
+                        if small_link(ui, "Open GitHub releases").clicked()
+                            && let Err(error) = open::that(updates::RELEASES)
+                        {
+                            self.error(error);
+                        }
+                    });
+                });
         });
-        if self.updater.prepared.is_some() && ui.small_button("Discard downloaded update").clicked()
-        {
-            self.updater.prepared = None;
-            self.updater.message =
-                "Downloaded update discarded. The installed app was not changed.".into();
-        }
-        if let Some(update) = &self.updater.available
-            && ui
-                .button(format!("Release notes · {}", update.version))
-                .clicked()
-            && let Err(error) = open::that(&update.url)
-        {
-            self.error(error);
-        }
-        if ui.small_button("Open GitHub releases").clicked()
-            && let Err(error) = open::that(updates::RELEASES)
-        {
-            self.error(error);
-        }
     }
 }

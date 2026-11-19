@@ -1,5 +1,24 @@
 # Patch Notes
 
+## Unreleased
+
+### [ GENERAL ]
+- New look: a warm, light keycap design shared with XMouse, replacing the dark/amber theme. Buttons, switches and lists respond with smooth hover and press feedback.
+- New embedded fonts: Onest for text, Unbounded for headings and scores, JetBrains Mono for file names and stats. Their SIL Open Font License notices are bundled.
+- Messages now appear in a card above the status bar and stay until dismissed. Dialogs dim the window behind them.
+
+### [ LIBRARY ]
+- Layout switching, map and sort pickers, and the list toggle sit together in the toolbar. Folder paths in the sidebar no longer show the `\\?\` prefix.
+
+### [ DEMOS ]
+- Fixed missing map artwork for Ancient, Anubis, Dust II, Mirage, Nuke and Overpass.
+- Both team cards and the map tile now share one height, however many players a team recorded.
+- In narrow windows the map becomes a banner and the teams stack, instead of running off the edge.
+
+### [ VOICE ]
+- Selected players appear as removable chips next to Copy voice command.
+- Playback tracks show their waveforms in the new style; individual clips fold away under one header.
+
 ## 14.11.2026 — 2.0.2
 
 ### [ DEMOS ]

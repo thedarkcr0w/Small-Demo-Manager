@@ -37,6 +37,14 @@ dependencies resolved in `Cargo.lock`):
 * tempfile — MIT OR Apache-2.0
 * zip — MIT
 * trash — MIT
+* image (PNG/ICO/JPEG/WebP decoding) — MIT OR Apache-2.0
+  https://github.com/image-rs/image
+* Onest (Regular/Medium/Bold) — SIL Open Font License 1.1
+  https://github.com/googlefonts/onest
+* Unbounded (ExtraBold) — SIL Open Font License 1.1
+  https://github.com/googlefonts/unbounded
+* JetBrains Mono (Medium) — SIL Open Font License 1.1
+  https://github.com/JetBrains/JetBrainsMono
 * Rust standard library and compiler-builtins — compiler/runtime notices below in the release bundle
 * GCC runtime — GPL-3.0 with the GCC Runtime Library Exception
 * MinGW-w64 runtime and winpthreads — their bundled notices apply
@@ -55,6 +63,10 @@ Unmodified sources are available from each exact crates.io version linked in
 that index and via `cargo fetch --locked`; the modified parser is in `vendor/`.
 The build script does not publish GitHub releases.
 
-Segoe UI / Consolas are loaded from the operating system when available and are
-not bundled or redistributed. egui's fallback fonts are provided by
-epaint_default_fonts under its upstream licenses.
+The interface fonts Onest, Unbounded and JetBrains Mono are embedded unmodified
+from `assets/fonts/`; their copyright notices and the full SIL Open Font License
+1.1 are in `LICENSES/fonts/OFL.txt` and are appended to this file in the release
+bundle. Segoe UI / Segoe UI Symbol are loaded from the operating system only as
+fallbacks for characters the bundled fonts lack, and are not bundled or
+redistributed. egui's fallback fonts are provided by epaint_default_fonts under
+its upstream licenses.

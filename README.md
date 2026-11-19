@@ -4,16 +4,16 @@
 
 **A native, all-in-one demo manager for Counter-Strike 2.**
 Browse your library, inspect matches, extract per-player voice chat, and copy
-in-game spectator commands — with the familiar dark/amber design, rebuilt in Rust.
+in-game spectator commands — in a warm, tactile keycap design, native in Rust.
 
-[![Latest release](https://img.shields.io/github/v/release/thedarkcr0w/Small-Demo-Manager?label=release&color=f59e0b)](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/thedarkcr0w/Small-Demo-Manager?label=release&color=f0452b)](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows)](#-runtime-requirements)
-[![Rust](https://img.shields.io/badge/Rust-native-f59e0b?logo=rust)](Cargo.toml)
+[![Rust](https://img.shields.io/badge/Rust-native-f0452b?logo=rust)](Cargo.toml)
 [![License](https://img.shields.io/badge/license-personal%20use-blue)](LICENSE)
 
 <img width="1280" alt="Small Demo Manager — native Rust match overview" src="showcase.png" />
 
-*Native Rust match view. Local file paths are hidden in this screenshot.*
+*Match view with two players picked for the spectator voice command. Local file paths are hidden in this screenshot.*
 
 </div>
 
@@ -161,6 +161,7 @@ Huge thanks to everyone who tests builds and reports issues:
 ## 📦 Built With
 
 * **UI** — egui / eframe, directly rendered in a native OS window.
+* **Fonts** — Onest, Unbounded, and JetBrains Mono (SIL Open Font License), embedded.
 * **Demo parsing** — [source2-demo](https://github.com/Rupas1k/source2-demo).
 * **Audio** — libopus / opus-rs, hound, rodio.
 * **Desktop integration** — notify, rfd, trash, winreg.

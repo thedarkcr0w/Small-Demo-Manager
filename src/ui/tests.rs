@@ -260,6 +260,191 @@ fn dropping_during_extraction_waits_without_interrupting_saved_audio_work() {
     assert_eq!(h.app.pending_imports.len(), 1);
 }
 
+/// One headless frame of a 1000×680 window at `clock` (which then moves on 10 ms).
+fn frame(
+    ctx: &Context,
+    clock: &mut f64,
+    events: Vec<egui::Event>,
+    add: &mut dyn FnMut(&mut Ui),
+) -> egui::FullOutput {
+    let input = egui::RawInput {
+        time: Some(*clock),
+        events,
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 680.0))),
+        ..Default::default()
+    };
+    *clock += 0.01;
+    let mut output = ctx.run_ui(input, |ui| add(ui));
+    // Headless: no GPU takes the font atlas, so drop its upload.
+    output.textures_delta.clear();
+    output
+}
+
+/// Move to `pos`, press and release there; returns the frame of the release.
+fn click(
+    ctx: &Context,
+    clock: &mut f64,
+    pos: Pos2,
+    add: &mut dyn FnMut(&mut Ui),
+) -> egui::FullOutput {
+    let button = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Default::default(),
+    };
+    frame(ctx, clock, vec![egui::Event::PointerMoved(pos)], add);
+    frame(ctx, clock, vec![button(true)], add);
+    frame(ctx, clock, vec![button(false)], add)
+}
+
+#[test]
+fn the_window_can_still_be_closed_while_a_dialog_is_open() {
+    let mut h = harness();
+    h.app.dialog = Some(Dialog::About);
+    let ctx = Context::default();
+    theme::install(&ctx);
+    let mut clock = 0.0;
+    let mut draw = |ui: &mut Ui| {
+        h.app.chrome(ui);
+        h.app.dialogs(&ui.ctx().clone());
+    };
+    // Let the modal layer settle before the pointer arrives.
+    frame(&ctx, &mut clock, vec![], &mut draw);
+    frame(&ctx, &mut clock, vec![], &mut draw);
+    let close_button = pos2(1000.0 - 8.0 - 21.0, 27.0);
+    let output = click(&ctx, &mut clock, close_button, &mut draw);
+    let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+    assert!(
+        commands
+            .iter()
+            .any(|command| matches!(command, ViewportCommand::Close)),
+        "the title bar's close button must work above a modal dialog"
+    );
+    assert!(h.app.dialog.is_some(), "the dialog itself was not touched");
+}
+
+#[test]
+fn a_row_click_opens_the_demo_and_its_star_only_toggles_the_favorite() {
+    let mut h = harness();
+    add_demo(&mut h.app, "first");
+    add_demo(&mut h.app, "second");
+    let ctx = Context::default();
+    theme::install(&ctx);
+    let mut clock = 0.0;
+    frame(&ctx, &mut clock, vec![], &mut |ui| h.app.library(ui, false));
+    let row = ctx
+        .read_response(Id::unique(("demo-row", "second")))
+        .expect("the row was drawn")
+        .rect;
+    let star = row.left_top() + vec2(22.0, 21.0);
+    click(&ctx, &mut clock, star, &mut |ui| h.app.library(ui, false));
+    let demos = &h.app.store.as_ref().expect("store").library.demos;
+    assert!(demos["second"].favorite);
+    assert!(!demos["first"].favorite);
+    assert!(h.app.selected.is_none(), "the star does not open the demo");
+    assert!(!h.app.parse_requested);
+    assert!(h.app.dirty.is_some(), "the favorite is saved");
+
+    click(&ctx, &mut clock, row.center(), &mut |ui| {
+        h.app.library(ui, false);
+    });
+    assert_eq!(h.app.selected.as_deref(), Some("second"));
+    assert!(h.app.parse_requested, "a click asks for this demo's data");
+    let demos = &h.app.store.as_ref().expect("store").library.demos;
+    assert!(
+        demos["second"].favorite,
+        "opening leaves the favorite alone"
+    );
+}
+
+#[test]
+fn a_card_click_opens_the_demo() {
+    let mut h = harness();
+    add_demo(&mut h.app, "first");
+    let ctx = Context::default();
+    theme::install(&ctx);
+    let mut clock = 0.0;
+    frame(&ctx, &mut clock, vec![], &mut |ui| h.app.library(ui, true));
+    let card = ctx
+        .read_response(Id::unique(("demo-card", "first")))
+        .expect("the card was drawn")
+        .rect;
+    click(&ctx, &mut clock, card.center(), &mut |ui| {
+        h.app.library(ui, true);
+    });
+    assert_eq!(h.app.selected.as_deref(), Some("first"));
+    assert!(h.app.parse_requested);
+}
+
+#[test]
+fn the_match_view_stacks_instead_of_overflowing_a_narrow_panel() {
+    let mut h = harness();
+    let players = (0..10)
+        .map(|i| Player {
+            name: format!("Player {i}"),
+            steam_id: Some(format!("7656119800000000{i}")),
+            team: Some(i % 2),
+            ..Default::default()
+        })
+        .collect();
+    let demo = Demo {
+        id: "fixture".into(),
+        path: PathBuf::from("fixture.dem"),
+        available: true,
+        parsed: Some(MatchData {
+            players,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    h.app.selected = Some(demo.id.clone());
+    h.app
+        .store
+        .as_mut()
+        .expect("store")
+        .library
+        .demos
+        .insert(demo.id.clone(), demo);
+    let ctx = Context::default();
+    theme::install(&ctx);
+    let mut clock = 0.0;
+    // The details pane of the split view in a minimum-size window is about this wide.
+    let pane = Rect::from_min_size(pos2(0.0, 0.0), vec2(386.0, 680.0));
+    let mut output = None;
+    for _ in 0..3 {
+        output = Some(frame(&ctx, &mut clock, vec![], &mut |ui| {
+            let mut ui = ui.new_child(UiBuilder::new().max_rect(pane));
+            h.app.details(&mut ui);
+        }));
+    }
+    let shapes = output.expect("frames ran").shapes;
+    // Neither squeezed: every player name is shown in full …
+    let mut names = 0;
+    for clipped in &shapes {
+        if let egui::epaint::Shape::Text(text) = &clipped.shape
+            && text.galley.job.text.starts_with("Player ")
+        {
+            names += 1;
+            assert!(!text.galley.elided, "{} is cut off", text.galley.job.text);
+        }
+    }
+    assert!(names >= 5, "the first team's players are on screen");
+    // … nor overflowing: whatever is painted (even where the scroll area would clip it)
+    // stays inside the pane.
+    let right = shapes
+        .iter()
+        .map(|clipped| clipped.shape.visual_bounding_rect())
+        .filter(|rect| rect.is_positive())
+        .map(|rect| rect.right())
+        .fold(0.0, f32::max);
+    assert!(
+        right <= pane.right() + 2.0,
+        "painted up to x = {right}, past the {} wide pane",
+        pane.width()
+    );
+}
+
 #[test]
 fn voice_view_renders_everyone_and_selected_player_as_separate_tracks() {
     let mut h = harness();
@@ -336,8 +521,8 @@ fn voice_view_renders_everyone_and_selected_player_as_separate_tracks() {
         text(&shape.shape, &mut labels);
     }
     assert!(labels.iter().any(|text| text == "Everyone"));
-    assert_eq!(labels.iter().filter(|text| *text == "▶ Play").count(), 2);
-    assert_eq!(labels.iter().filter(|text| *text == "■ Stop").count(), 2);
+    assert_eq!(labels.iter().filter(|text| *text == "Play").count(), 2);
+    assert_eq!(labels.iter().filter(|text| *text == "Stop").count(), 2);
     assert!(
         labels
             .iter()
