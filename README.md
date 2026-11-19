@@ -11,9 +11,9 @@ in-game spectator commands — in a warm, tactile keycap design, native in Rust.
 [![Rust](https://img.shields.io/badge/Rust-native-f0452b?logo=rust)](Cargo.toml)
 [![License](https://img.shields.io/badge/license-personal%20use-blue)](LICENSE)
 
-<img width="1280" alt="Small Demo Manager 2.1.0 — match view in the new keycap design" src="showcase-2.1.0.png" />
+<img width="1280" alt="Small Demo Manager 2.2.0 — match view" src="showcase-2.2.0.png" />
 
-*Version 2.1.0 — the UI redesign. Match view with two players picked for the spectator voice command. Local file paths are hidden in this screenshot.*
+*Version 2.2.0 — match view. Local file paths are hidden in this screenshot.*
 
 </div>
 
@@ -65,7 +65,7 @@ not release-tested.
 
 ## 📥 Installation
 
-1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.1.0/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
+1. Download **[`SmallDemoManager-native-windows-x64.zip`](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/download/v2.2.0/SmallDemoManager-native-windows-x64.zip)** from [Releases](https://github.com/thedarkcr0w/Small-Demo-Manager/releases/latest).
 2. Extract the ZIP to a folder and run **`SmallDemoManager.exe`**.
 3. Add your demo folder, then open **Settings** to configure the CS2 destination.
 
@@ -122,11 +122,11 @@ publish anything.
 
 ## 📝 Patch Notes
 
-**19.11.2026 — 2.1.0**
+**19.11.2026 — 2.2.0**
 
-* New look: a warm, light keycap design with new embedded fonts, shared with XMouse.
-* Fixed missing map artwork for Ancient, Anubis, Dust II, Mirage, Nuke and Overpass.
-* The match view adapts to narrow windows; messages stay until dismissed.
+* Community-muted players, whom CS2 won't let you hear in demo playback, are marked "Muted".
+* Demos are read again once when opened, so the marks appear for demos you already opened.
+* More stack headroom for demo decoding, so unusually deep demos can't crash the app.
 
 Read the [full patch notes and previous dated updates](PATCHNOTES.md).
 

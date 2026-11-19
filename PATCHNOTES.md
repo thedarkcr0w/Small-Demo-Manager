@@ -1,6 +1,6 @@
 # Patch Notes
 
-## Unreleased
+## 19.11.2026 — 2.2.0
 
 ### [ DEMOS ]
 - Community-muted players, whom you can't hear when you watch the demo in CS2, are marked "Muted" in the team cards, the player menu and the voice extractor. Their voice is still extracted as usual.
