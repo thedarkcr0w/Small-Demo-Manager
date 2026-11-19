@@ -136,6 +136,8 @@ Read the [full patch notes and previous dated updates](PATCHNOTES.md).
 
 This project was originally created by **[Pythaeus](https://github.com/pythaeusone)** as the [CS2-SourceTV-Demo-Voice-Calculator](https://github.com/pythaeusone/CS2-SourceTV-Demo-Voice-Calculator) and continues to be maintained in his absence.
 
+Special thanks to **[Ody](https://github.com/OdyCS)** for [OdyCSUnmuter](https://github.com/OdyCS/OdyCSUnmuter). Its demo rewrite rules, which make community-muted players audible again in CS2 demo playback, are ported into Small Demo Manager's unmute engine under the MIT license.
+
 Huge thanks to everyone who tests builds and reports issues:
 
 - **[KEROVSKI](https://x.com/KEROVSKI_)** — for inspiring the project's direction
@@ -164,6 +166,7 @@ Huge thanks to everyone who tests builds and reports issues:
 * **UI** — egui / eframe, directly rendered in a native OS window.
 * **Fonts** — Onest, Unbounded, and JetBrains Mono (SIL Open Font License), embedded.
 * **Demo parsing** — [source2-demo](https://github.com/Rupas1k/source2-demo).
+* **Demo unmuting** — rewrite rules from [OdyCSUnmuter](https://github.com/OdyCS/OdyCSUnmuter) by Ody (MIT).
 * **Audio** — libopus / opus-rs, hound, rodio.
 * **Desktop integration** — notify, rfd, trash, winreg.
 See [third-party notices](THIRD-PARTY-NOTICES.md) and `Cargo.lock`.
