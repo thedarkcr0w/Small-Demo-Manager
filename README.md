@@ -11,9 +11,9 @@ in-game spectator commands — in a warm, tactile keycap design, native in Rust.
 [![Rust](https://img.shields.io/badge/Rust-native-f0452b?logo=rust)](Cargo.toml)
 [![License](https://img.shields.io/badge/license-personal%20use-blue)](LICENSE)
 
-<img width="1280" alt="Small Demo Manager — native Rust match overview" src="showcase.png" />
+<img width="1280" alt="Small Demo Manager 2.1.0 — match view in the new keycap design" src="showcase-2.1.0.png" />
 
-*Match view with two players picked for the spectator voice command. Local file paths are hidden in this screenshot.*
+*Version 2.1.0 — the UI redesign. Match view with two players picked for the spectator voice command. Local file paths are hidden in this screenshot.*
 
 </div>
 

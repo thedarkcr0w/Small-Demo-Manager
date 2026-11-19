@@ -2,7 +2,7 @@ name: Native Rust
 
 on:
   push:
-    paths: ['src/**', 'tests/**', 'vendor/**', 'assets/**', 'Cargo.*', 'build.rs', 'scripts/**', 'docs/**', 'README.md', 'PATCHNOTES.md', 'showcase.png', 'LICENSE*', 'LICENSES/**', 'THIRD-PARTY-NOTICES.md', '.github/workflows/native.yml']
+    paths: ['src/**', 'tests/**', 'vendor/**', 'assets/**', 'Cargo.*', 'build.rs', 'scripts/**', 'docs/**', 'README.md', 'PATCHNOTES.md', 'showcase-*.png', 'LICENSE*', 'LICENSES/**', 'THIRD-PARTY-NOTICES.md', '.github/workflows/native.yml']
   pull_request:
   workflow_dispatch:
 
